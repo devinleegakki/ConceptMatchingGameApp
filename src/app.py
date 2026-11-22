@@ -39,6 +39,10 @@ class App:
         self.scores: list[Score] = []
         self.loading = False
         self.pair_zone_hover = False
+        self.pair_zone_visual: ft.Container | None = None
+        self.feedback_status: str | None = None
+        self.feedback_cards = []
+        self.feedback_explanation: str | None = None
         self._web_connected = True
         if self.is_web_preview:
             self.page.on_connect = self._on_web_connect
@@ -171,17 +175,40 @@ class App:
                 if engine.state.is_finished: await self.finish_level()
 
     def on_card(self, card_id: str):
-        if not self.engine: return
-        if card_id is None:
+        if not self.engine or self.feedback_status or card_id is None:
             return
-        result = self.engine.select(str(card_id)); self.refresh_game()
-        if result == "mismatch": self.page.run_task(self.resolve_mismatch)
-        elif result == "matched" and self.engine.state.is_finished: self.page.run_task(self.finish_level)
+        card_id = str(card_id)
+        candidate = self.engine.card(card_id)
+        if candidate is None:
+            return
+        selected_before = list(self.engine.state.selected_card_ids)
+        result = self.engine.select(card_id)
+        if result == "mismatch":
+            self.feedback_status = "error"
+            self.feedback_cards = [self.engine.card(item_id) for item_id in selected_before + [card_id]]
+            self.feedback_cards = [card for card in self.feedback_cards if card is not None]
+            self.refresh_game()
+            self.page.run_task(self.resolve_feedback)
+        elif result == "matched":
+            self.feedback_status = "success"
+            self.feedback_cards = [candidate]
+            if selected_before:
+                previous = self.engine.card(selected_before[0])
+                if previous:
+                    self.feedback_cards.insert(0, previous)
+            question_explanations = [card.explanation for card in self.feedback_cards if card.type == "question" and card.explanation]
+            self.feedback_explanation = question_explanations[0] if question_explanations else next((card.explanation for card in self.feedback_cards if card.explanation), None)
+            # Successful pairs are also locked during the 700ms feedback.
+            self.engine.state.is_locked = True
+            self.refresh_game()
+            self.page.run_task(self.resolve_feedback)
+        else:
+            self.refresh_game()
 
     def pair_zone_accepts(self, event) -> bool:
         """Validate a drag before Flet treats the drop zone as active."""
         card_id = self.drag_card_id(event)
-        if not card_id or not self.engine:
+        if not card_id or not self.engine or self.feedback_status:
             return False
         card = self.engine.card(card_id)
         return card is not None and not card.is_matched and card_id not in self.engine.state.selected_card_ids and not self.engine.state.is_locked
@@ -189,6 +216,7 @@ class App:
     def pair_zone_will_accept(self, event) -> bool:
         accepted = self.pair_zone_accepts(event)
         self.pair_zone_hover = accepted
+        self.update_pair_zone_visual()
         # Do not rebuild the page from inside Flet's hit-test callback. A
         # rebuild here invalidates the active drag target and causes the card
         # to snap back, especially on the third row of level two.
@@ -196,7 +224,24 @@ class App:
 
     def pair_zone_leave(self, _event):
         self.pair_zone_hover = False
-        self.refresh_game()
+        self.update_pair_zone_visual()
+
+    def update_pair_zone_visual(self):
+        if not self.pair_zone_visual:
+            return
+        selected = bool(self.engine and self.engine.state.selected_card_ids)
+        if self.feedback_status == "success":
+            background, border = colors.GREEN_LIGHT, colors.GREEN_ACCENT
+        elif self.feedback_status == "error":
+            background, border = "#fbe9e7", colors.ERROR
+        elif self.pair_zone_hover or selected:
+            background, border = colors.GREEN_LIGHT, colors.GREEN_ACCENT
+        else:
+            background, border = colors.WHITE, colors.HAIRLINE
+        self.pair_zone_visual.bgcolor = background
+        self.pair_zone_visual.border = ft.Border.all(2 if self.pair_zone_hover or selected or self.feedback_status else 1, border)
+        if self.pair_zone_visual.page:
+            self.pair_zone_visual.update()
 
     @staticmethod
     def drag_card_id(event) -> str | None:
@@ -209,9 +254,23 @@ class App:
             return None
         return str(data)
 
-    async def resolve_mismatch(self):
+    async def resolve_feedback(self):
         await asyncio.sleep(0.7)
-        if self.engine: self.engine.resolve_mismatch(); self.refresh_game()
+        if not self.engine:
+            return
+        was_success = self.feedback_status == "success"
+        if not was_success:
+            self.engine.resolve_mismatch()
+        else:
+            self.engine.state.is_locked = False
+        self.feedback_status = None
+        self.feedback_cards = []
+        self.feedback_explanation = None
+        self.pair_zone_hover = False
+        if was_success and self.engine.state.is_finished:
+            self.show_level_result()
+        else:
+            self.refresh_game()
 
     async def finish_level(self):
         await asyncio.sleep(0.35)
@@ -228,9 +287,11 @@ class App:
         duration = self.level_data.duration_seconds if self.level_data else max(1, state.remaining_seconds)
         progress = max(0.0, min(1.0, 1 - state.remaining_seconds / duration))
         selected_ids = set(state.selected_card_ids)
-        available_cards = [card for card in state.cards if card.id not in selected_ids]
+        feedback_ids = {card.id for card in self.feedback_cards}
+        available_cards = [card for card in state.cards if card.id not in selected_ids and card.id not in feedback_ids]
         cards = [game_card(card, selected=False, width=78, height=132) for card in available_cards]
-        pairing_cards = [game_card(card, selected=True, draggable=False, width=108, height=104) for card in state.cards if card.id in selected_ids]
+        visible_pair_cards = self.feedback_cards if self.feedback_status else [card for card in state.cards if card.id in selected_ids]
+        pairing_cards = [game_card(card, selected=True, draggable=False, width=108, height=104) for card in visible_pair_cards]
         pairing_content = ft.Row(pairing_cards, alignment=ft.MainAxisAlignment.CENTER, spacing=10) if pairing_cards else ft.Text("将第一张卡片拖到这里", size=13, color=colors.INK_LIGHT)
         target_visual = ft.Container(
             ft.Column([
@@ -238,14 +299,15 @@ class App:
                 pairing_content,
                 ft.Text("再拖入一张相关卡片即可判定", size=12, color=colors.INK_LIGHT),
             ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=5),
-            bgcolor=colors.GREEN_LIGHT if selected_ids or self.pair_zone_hover else colors.WHITE,
-            border=ft.Border.all(2 if selected_ids or self.pair_zone_hover else 1, colors.GREEN_ACCENT if selected_ids or self.pair_zone_hover else colors.HAIRLINE),
+            bgcolor=colors.GREEN_LIGHT if self.feedback_status == "success" else "#fbe9e7" if self.feedback_status == "error" else colors.WHITE,
+            border=ft.Border.all(2 if self.feedback_status else 1, colors.GREEN_ACCENT if self.feedback_status == "success" else colors.ERROR if self.feedback_status == "error" else colors.HAIRLINE),
             border_radius=18,
             padding=12,
             height=150,
             width=400,
             alignment=ft.Alignment(0, 0),
         )
+        self.pair_zone_visual = target_visual
         # The target is deliberately taller than the visible panel. The extra
         # 20px above/below acts as a touch-safe drop margin, while the visual
         # panel remains centered inside it.
@@ -266,8 +328,21 @@ class App:
         grid = ft.Column(card_rows, horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=10)
         hud = ft.Row([ft.Text(f"LEVEL {state.level}", color=colors.WHITE, weight=ft.FontWeight.W_600, size=13), ft.Text(f"步数 {state.steps}", color=colors.WHITE, size=13), ft.Text(f"连击 ×{state.combo}", color=colors.WHITE, size=13), ft.Text(f"{state.remaining_seconds}s", color=colors.WHITE, weight=ft.FontWeight.W_600, size=13)], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
         countdown = ft.ProgressBar(value=progress, bar_height=8, color=colors.GREEN_LIGHT, bgcolor=colors.GREEN_UPLIFT, border_radius=8, semantics_label="关卡倒计时进度", semantics_value=f"{state.remaining_seconds}秒剩余")
-        hint = ft.Text("拖动两张卡片到下方配对区" if not state.is_locked else "配对错误，请稍候再试", color="#D9E8E2" if not state.is_locked else "#F4B5AE", size=14)
-        content = ft.Column([ft.Container(ft.Column([hud, countdown, hint], spacing=10), bgcolor=colors.HOUSE_GREEN, border_radius=18, padding=16), grid, target], expand=True, spacing=16, scroll=ft.ScrollMode.AUTO)
+        if self.feedback_status == "success":
+            hint_text, hint_color = "配对成功", colors.GREEN_LIGHT
+        elif self.feedback_status == "error":
+            hint_text, hint_color = "配对不正确，请稍候再试", "#F4B5AE"
+        else:
+            hint_text, hint_color = "拖动两张卡片到下方配对区", "#D9E8E2"
+        hint = ft.Text(hint_text, color=hint_color, size=14)
+        explanation_view = ft.Container(
+            ft.Text(f"解释：{self.feedback_explanation}", size=14, color=colors.INK, text_align=ft.TextAlign.CENTER),
+            bgcolor=colors.WHITE,
+            border_radius=12,
+            padding=12,
+            visible=bool(self.feedback_status == "success" and self.feedback_explanation),
+        )
+        content = ft.Column([ft.Container(ft.Column([hud, countdown, hint], spacing=10), bgcolor=colors.HOUSE_GREEN, border_radius=18, padding=16), grid, target, explanation_view], expand=True, spacing=16, scroll=ft.ScrollMode.AUTO)
         self.page.clean(); self.page.add(self.shell(content, dark=True)); self.page.update()
 
     def show_level_result(self):
