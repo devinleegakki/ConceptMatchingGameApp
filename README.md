@@ -11,7 +11,7 @@ python -m pip install -r requirements.txt
 flet run src/main.py --web
 ```
 
-Set `CSV_URL` to a published CSV endpoint before starting. A sample URL is included in `.env.example`.
+The project defaults to the team's Google Sheets CSV endpoint. You can override it with `CSV_URL` before starting. The sheet must contain the schema below; an empty sheet produces a clear in-app error until content is added.
 
 ## CSV schema
 

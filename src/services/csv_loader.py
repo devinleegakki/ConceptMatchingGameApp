@@ -15,6 +15,8 @@ class DataError(ValueError):
 
 
 def parse_csv(text: str, level: int) -> LevelData:
+    if not text.strip():
+        raise DataError("在线题库为空，请先在 Google Sheets 填写题库字段和卡片数据")
     reader = csv.DictReader(io.StringIO(text))
     if not reader.fieldnames or not REQUIRED_COLUMNS.issubset(set(reader.fieldnames)):
         missing = REQUIRED_COLUMNS - set(reader.fieldnames or [])

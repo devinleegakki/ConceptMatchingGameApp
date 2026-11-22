@@ -10,6 +10,8 @@ from services.csv_loader import DataError, load_level
 from services.game_engine import GameEngine
 from theme import colors
 
+DEFAULT_CSV_URL = "https://docs.google.com/spreadsheets/d/1f055xrnz5R1XLxFZ6zxACPGBSYEZ_4s-ee0GUERpTC4/export?format=csv"
+
 
 @dataclass
 class Score:
@@ -27,7 +29,7 @@ class App:
         self.page.bgcolor = colors.CANVAS
         self.page.padding = 0
         self.page.theme = ft.Theme(font_family="Arial")
-        self.csv_url = os.getenv("CSV_URL", "")
+        self.csv_url = os.getenv("CSV_URL", DEFAULT_CSV_URL)
         self.engine: GameEngine | None = None
         self.level_data: LevelData | None = None
         self.level = 1
