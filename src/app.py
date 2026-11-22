@@ -159,6 +159,10 @@ class App:
             self.loading = False; self.show_home(str(exc)); return
         self.loading = False
         self.engine = GameEngine(self.level_data)
+        self.feedback_status = None
+        self.feedback_cards = []
+        self.feedback_explanation = None
+        self.pair_zone_hover = False
         self.show_game()
         self.page.run_task(self.timer_loop, self.engine)
 
@@ -177,6 +181,8 @@ class App:
     def on_card(self, card_id: str):
         if not self.engine or self.feedback_status or card_id is None:
             return
+        # The pointer has left the drop target once a card is released.
+        self.pair_zone_hover = False
         card_id = str(card_id)
         candidate = self.engine.card(card_id)
         if candidate is None:
@@ -185,6 +191,8 @@ class App:
         result = self.engine.select(card_id)
         if result == "mismatch":
             self.feedback_status = "error"
+            # A new completed attempt replaces the previous explanation.
+            self.feedback_explanation = None
             self.feedback_cards = [self.engine.card(item_id) for item_id in selected_before + [card_id]]
             self.feedback_cards = [card for card in self.feedback_cards if card is not None]
             self.refresh_game()
@@ -261,11 +269,13 @@ class App:
         was_success = self.feedback_status == "success"
         if not was_success:
             self.engine.resolve_mismatch()
+            # An incorrect next attempt ends the previous explanation's
+            # lifetime as well.
+            self.feedback_explanation = None
         else:
             self.engine.state.is_locked = False
         self.feedback_status = None
         self.feedback_cards = []
-        self.feedback_explanation = None
         self.pair_zone_hover = False
         if was_success and self.engine.state.is_finished:
             self.show_level_result()
@@ -299,8 +309,8 @@ class App:
                 pairing_content,
                 ft.Text("再拖入一张相关卡片即可判定", size=12, color=colors.INK_LIGHT),
             ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=5),
-            bgcolor=colors.GREEN_LIGHT if self.feedback_status == "success" else "#fbe9e7" if self.feedback_status == "error" else colors.WHITE,
-            border=ft.Border.all(2 if self.feedback_status else 1, colors.GREEN_ACCENT if self.feedback_status == "success" else colors.ERROR if self.feedback_status == "error" else colors.HAIRLINE),
+            bgcolor=colors.GREEN_LIGHT if self.feedback_status == "success" or self.pair_zone_hover else "#fbe9e7" if self.feedback_status == "error" else colors.WHITE,
+            border=ft.Border.all(2 if self.feedback_status or self.pair_zone_hover else 1, colors.GREEN_ACCENT if self.feedback_status == "success" or self.pair_zone_hover else colors.ERROR if self.feedback_status == "error" else colors.HAIRLINE),
             border_radius=18,
             padding=12,
             height=150,
@@ -340,7 +350,10 @@ class App:
             bgcolor=colors.WHITE,
             border_radius=12,
             padding=12,
-            visible=bool(self.feedback_status == "success" and self.feedback_explanation),
+            # Keep the last successful explanation visible while the next
+            # pair is being considered; it is replaced/cleared on completion
+            # of that next attempt.
+            visible=bool(self.feedback_explanation),
         )
         content = ft.Column([ft.Container(ft.Column([hud, countdown, hint], spacing=10), bgcolor=colors.HOUSE_GREEN, border_radius=18, padding=16), grid, target, explanation_view], expand=True, spacing=16, scroll=ft.ScrollMode.AUTO)
         self.page.clean(); self.page.add(self.shell(content, dark=True)); self.page.update()
