@@ -79,22 +79,24 @@ class App:
         self.level = level
         self.engine = GameEngine(self.level_data)
         self.show_game()
-        self.page.run_task(self.timer_loop)
+        # Pass the engine instance so an old timer cannot keep ticking a
+        # newly-started level after the user advances or restarts.
+        self.page.run_task(self.timer_loop, self.engine)
 
     def start_level(self, level: int):
         if self.loading:
             return
         self.page.run_task(self.load_and_start, level)
 
-    def timer_loop(self):
-        async def loop():
-            while self.engine and not self.engine.state.is_finished:
-                await asyncio.sleep(1)
-                if self.engine and self.engine.tick():
-                    self.refresh_game()
-                    if self.engine.state.is_finished:
-                        await self.finish_level()
-        return loop()
+    async def timer_loop(self, engine: GameEngine):
+        while self.engine is engine and not engine.state.is_finished:
+            await asyncio.sleep(1)
+            if self.engine is not engine:
+                return
+            if engine.tick():
+                self.refresh_game()
+                if engine.state.is_finished:
+                    await self.finish_level()
 
     def on_card(self, card_id: str):
         if not self.engine:
@@ -129,6 +131,8 @@ class App:
             return
         state = self.engine.state
         cards = [game_card(card, self.on_card, selected=card.id in state.selected_card_ids) for card in state.cards]
+        duration = self.level_data.duration_seconds if self.level_data else max(1, state.remaining_seconds)
+        elapsed_ratio = max(0.0, min(1.0, 1 - (state.remaining_seconds / duration)))
         selected = ", ".join(state.selected_card_ids) if state.selected_card_ids else "等待第二张卡"
         target = ft.DragTarget(
             group="cards",
@@ -151,8 +155,26 @@ class App:
             ft.Text(f"步数 {state.steps}", color=colors.SURFACE),
             ft.Text(f"连击 ×{state.combo}", color=colors.NAV_GOLD, weight=ft.FontWeight.BOLD),
         ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
+        countdown = ft.Column(
+            [
+                ft.Row([
+                    ft.Text("倒计时", size=11, color=colors.SURFACE, weight=ft.FontWeight.BOLD),
+                    ft.Text(f"{state.remaining_seconds}s", size=11, color=colors.NAV_GOLD, weight=ft.FontWeight.BOLD),
+                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                ft.ProgressBar(
+                    value=elapsed_ratio,
+                    bar_height=10,
+                    color=colors.SIGNAL,
+                    bgcolor=colors.MUTED_INDIGO,
+                    border_radius=0,
+                    semantics_label="关卡倒计时进度",
+                    semantics_value=f"{state.remaining_seconds}秒剩余",
+                ),
+            ],
+            spacing=4,
+        )
         hint = ft.Text("卡片内容已全部显示：请选择一张题目和对应公式" if not state.is_locked else "配对错误，卡片保持可见；请稍候再选", color=colors.ERROR if state.is_locked else colors.INK, size=12, weight=ft.FontWeight.BOLD)
-        content = ft.Column([ft.Container(hud, bgcolor=colors.CARBON, padding=10), hint, target, grid], expand=True, spacing=12)
+        content = ft.Column([ft.Container(ft.Column([hud, countdown], spacing=8), bgcolor=colors.CARBON, padding=10), hint, target, grid], expand=True, spacing=12)
         self.page.clean()
         self.page.add(self.shell(content))
         self.page.update()
