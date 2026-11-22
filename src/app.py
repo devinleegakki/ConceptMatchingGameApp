@@ -38,6 +38,7 @@ class App:
         self.level_data: LevelData | None = None
         self.scores: list[Score] = []
         self.loading = False
+        self.pair_zone_hover = False
         self._web_connected = True
         if self.is_web_preview:
             self.page.on_connect = self._on_web_connect
@@ -177,6 +178,26 @@ class App:
         if result == "mismatch": self.page.run_task(self.resolve_mismatch)
         elif result == "matched" and self.engine.state.is_finished: self.page.run_task(self.finish_level)
 
+    def pair_zone_accepts(self, event) -> bool:
+        """Validate a drag before Flet treats the drop zone as active."""
+        card_id = self.drag_card_id(event)
+        if not card_id or not self.engine:
+            return False
+        card = self.engine.card(card_id)
+        return card is not None and not card.is_matched and card_id not in self.engine.state.selected_card_ids and not self.engine.state.is_locked
+
+    def pair_zone_will_accept(self, event) -> bool:
+        accepted = self.pair_zone_accepts(event)
+        self.pair_zone_hover = accepted
+        # Do not rebuild the page from inside Flet's hit-test callback. A
+        # rebuild here invalidates the active drag target and causes the card
+        # to snap back, especially on the third row of level two.
+        return accepted
+
+    def pair_zone_leave(self, _event):
+        self.pair_zone_hover = False
+        self.refresh_game()
+
     @staticmethod
     def drag_card_id(event) -> str | None:
         """Read drag data across Flet web/desktop event representations."""
@@ -211,24 +232,29 @@ class App:
         cards = [game_card(card, selected=False, width=78, height=132) for card in available_cards]
         pairing_cards = [game_card(card, selected=True, draggable=False, width=108, height=104) for card in state.cards if card.id in selected_ids]
         pairing_content = ft.Row(pairing_cards, alignment=ft.MainAxisAlignment.CENTER, spacing=10) if pairing_cards else ft.Text("将第一张卡片拖到这里", size=13, color=colors.INK_LIGHT)
+        target_visual = ft.Container(
+            ft.Column([
+                ft.Text("配对区", size=18, weight=ft.FontWeight.W_600, color=colors.HOUSE_GREEN),
+                pairing_content,
+                ft.Text("再拖入一张相关卡片即可判定", size=12, color=colors.INK_LIGHT),
+            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=5),
+            bgcolor=colors.GREEN_LIGHT if selected_ids or self.pair_zone_hover else colors.WHITE,
+            border=ft.Border.all(2 if selected_ids or self.pair_zone_hover else 1, colors.GREEN_ACCENT if selected_ids or self.pair_zone_hover else colors.HAIRLINE),
+            border_radius=18,
+            padding=12,
+            height=150,
+            width=400,
+            alignment=ft.Alignment(0, 0),
+        )
+        # The target is deliberately taller than the visible panel. The extra
+        # 20px above/below acts as a touch-safe drop margin, while the visual
+        # panel remains centered inside it.
         target = ft.DragTarget(
             group="cards",
-            on_will_accept=lambda _: True,
+            on_will_accept=self.pair_zone_will_accept,
             on_accept=lambda event: self.on_card(self.drag_card_id(event)),
-            content=ft.Container(
-                ft.Column([
-                    ft.Text("配对区", size=18, weight=ft.FontWeight.W_600, color=colors.HOUSE_GREEN),
-                    pairing_content,
-                    ft.Text("再拖入一张相关卡片即可判定", size=12, color=colors.INK_LIGHT),
-                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=5),
-                bgcolor=colors.GREEN_LIGHT if selected_ids else colors.WHITE,
-                border=ft.Border.all(2 if selected_ids else 1, colors.GREEN_ACCENT if selected_ids else colors.HAIRLINE),
-                border_radius=18,
-                padding=12,
-                height=150,
-                width=400,
-                alignment=ft.Alignment(0, 0),
-            ),
+            on_leave=self.pair_zone_leave,
+            content=ft.Container(target_visual, width=400, height=190, alignment=ft.Alignment(0, 0)),
         )
         # Build rows explicitly instead of relying on GridView's aspect-ratio
         # calculation. This keeps the visual cards and their hit regions from

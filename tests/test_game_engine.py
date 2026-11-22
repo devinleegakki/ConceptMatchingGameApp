@@ -55,3 +55,13 @@ def test_unknown_drag_id_is_ignored_without_exception():
     assert game.select(None) == "ignored"
     assert game.select("missing-card") == "ignored"
 
+
+def test_second_level_can_pair_cards_after_three_rows():
+    cards = tuple(Card(str(i), pair, "question", pair) for i, pair in enumerate(("a", "a", "b", "b", "c", "c", "d", "d", "e", "e", "f", "f")))
+    game = GameEngine(LevelData(2, cards, 180), rng=random.Random(2))
+    first_pair = [card.id for card in game.state.cards if card.pair_id == "a"]
+    assert game.select(first_pair[0]) == "selected"
+    assert game.select(first_pair[1]) == "matched"
+    assert game.state.matched_pairs == 1
+    assert game.state.remaining_seconds == 180
+
