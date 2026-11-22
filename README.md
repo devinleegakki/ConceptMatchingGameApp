@@ -2,7 +2,7 @@
 
 Python + Flet implementation of the concept matching elimination game.
 
-Cards are fully visible from the beginning. Players pair a visible question card with its visible formula card; the game does not use hidden-card memory or flip-back behavior.
+Cards are fully visible from the beginning. Players drag two visible cards into the pairing zone below the grid; the game does not use hidden-card memory or click-to-select pairing.
 
 ## Run
 

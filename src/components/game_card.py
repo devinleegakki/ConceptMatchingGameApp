@@ -5,7 +5,7 @@ from theme import colors
 from theme import typography
 
 
-def game_card(card: Card, on_tap, *, selected: bool = False, width: int = 150, height: int = 124) -> ft.Control:
+def game_card(card: Card, on_tap=None, *, selected: bool = False, draggable: bool = True, width: int = 150, height: int = 124) -> ft.Control:
     if card.is_matched:
         return ft.Container(width=width, height=height, opacity=0.0)
     face = card.content
@@ -30,8 +30,9 @@ def game_card(card: Card, on_tap, *, selected: bool = False, width: int = 150, h
         border=ft.Border.all(2 if selected else 1, colors.GREEN_ACCENT if selected else colors.HAIRLINE),
         border_radius=12,
         shadow=ft.BoxShadow(blur_radius=4, spread_radius=0, color="#24000000", offset=ft.Offset(0, 1)),
-        on_click=lambda _: on_tap(card.id),
         animate=ft.Animation(180, ft.AnimationCurve.EASE_OUT),
     )
+    if not draggable:
+        return control
     return ft.Draggable(content=control, data=card.id, group="cards")
 

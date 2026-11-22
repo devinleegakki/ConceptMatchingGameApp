@@ -140,8 +140,8 @@ class App:
         self.page.clean()
         content = ft.Column([
             ft.Text("怎么玩", size=34, weight=ft.FontWeight.W_600, color=colors.STARBUCKS_GREEN),
-            ft.Text("选择一张题目卡，再选择对应的公式卡。也可以拖动卡片到中央配对区。", size=17, color=colors.INK),
-            ft.Container(ft.Column([ft.Text("配对规则", size=20, weight=ft.FontWeight.W_600, color=colors.STARBUCKS_GREEN), ft.Text("正确配对会增加连击；错误配对会短暂锁定操作。计时、步数和最高连击会记录在结算页。", size=16, color=colors.INK)], spacing=8), bgcolor=colors.WHITE, border_radius=12, padding=20),
+            ft.Text("将两张卡片依次拖到下方配对区，系统会自动判断。", size=17, color=colors.INK),
+            ft.Container(ft.Column([ft.Text("配对规则", size=20, weight=ft.FontWeight.W_600, color=colors.STARBUCKS_GREEN), ft.Text("先拖入题目或公式，再拖入对应卡片。正确配对会增加连击；错误配对会短暂锁定操作。", size=16, color=colors.INK)], spacing=8), bgcolor=colors.WHITE, border_radius=12, padding=20),
             self.pill("返回首页", lambda _: self.show_home(), primary=False),
         ], spacing=18, scroll=ft.ScrollMode.AUTO)
         self.page.add(self.shell(content)); self.page.update()
@@ -193,14 +193,18 @@ class App:
         state = self.engine.state
         duration = self.level_data.duration_seconds if self.level_data else max(1, state.remaining_seconds)
         progress = max(0.0, min(1.0, 1 - state.remaining_seconds / duration))
-        cards = [game_card(card, self.on_card, selected=card.id in state.selected_card_ids, width=78, height=132) for card in state.cards]
-        target = ft.DragTarget(group="cards", on_accept=lambda event: self.on_card(event.data), content=ft.Container(ft.Column([ft.Text("配对区", size=18, weight=ft.FontWeight.W_600, color=colors.HOUSE_GREEN), ft.Text("选择题目 + 公式", size=13, color=colors.INK_LIGHT)], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=4), bgcolor=colors.WHITE, border=ft.Border.all(1, colors.GREEN_LIGHT), border_radius=18, padding=14, height=82, alignment=ft.Alignment(0, 0)))
-        grid = ft.GridView(expand=True, runs_count=4, max_extent=96, spacing=8, run_spacing=10, child_aspect_ratio=0.59)
+        selected_ids = set(state.selected_card_ids)
+        cards = [game_card(card, selected=card.id in selected_ids, width=78, height=132) for card in state.cards if card.id not in selected_ids]
+        pairing_cards = [game_card(card, selected=True, draggable=False, width=108, height=104) for card in state.cards if card.id in selected_ids]
+        pairing_content = ft.Row(pairing_cards, alignment=ft.MainAxisAlignment.CENTER, spacing=10) if pairing_cards else ft.Text("将第一张卡片拖到这里", size=13, color=colors.INK_LIGHT)
+        target = ft.DragTarget(group="cards", on_accept=lambda event: self.on_card(event.data), content=ft.Container(ft.Column([ft.Text("配对区", size=18, weight=ft.FontWeight.W_600, color=colors.HOUSE_GREEN), pairing_content, ft.Text("再拖入一张相关卡片即可判定", size=12, color=colors.INK_LIGHT)], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=5), bgcolor=colors.GREEN_LIGHT if selected_ids else colors.WHITE, border=ft.Border.all(2 if selected_ids else 1, colors.GREEN_ACCENT if selected_ids else colors.HAIRLINE), border_radius=18, padding=12, height=150, alignment=ft.Alignment(0, 0)))
+        grid_height = 284 if len(state.cards) <= 8 else 426
+        grid = ft.GridView(height=grid_height, runs_count=4, max_extent=96, spacing=8, run_spacing=10, child_aspect_ratio=0.59)
         grid.controls = cards
         hud = ft.Row([ft.Text(f"LEVEL {state.level}", color=colors.WHITE, weight=ft.FontWeight.W_600, size=13), ft.Text(f"步数 {state.steps}", color=colors.WHITE, size=13), ft.Text(f"连击 ×{state.combo}", color=colors.WHITE, size=13), ft.Text(f"{state.remaining_seconds}s", color=colors.WHITE, weight=ft.FontWeight.W_600, size=13)], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
         countdown = ft.ProgressBar(value=progress, bar_height=8, color=colors.GREEN_LIGHT, bgcolor=colors.GREEN_UPLIFT, border_radius=8, semantics_label="关卡倒计时进度", semantics_value=f"{state.remaining_seconds}秒剩余")
-        hint = ft.Text("卡片内容已显示，请完成配对" if not state.is_locked else "配对错误，请稍候再试", color="#D9E8E2" if not state.is_locked else "#F4B5AE", size=14)
-        content = ft.Column([ft.Container(ft.Column([hud, countdown, hint], spacing=10), bgcolor=colors.HOUSE_GREEN, border_radius=18, padding=16), target, grid], expand=True, spacing=16, scroll=ft.ScrollMode.AUTO)
+        hint = ft.Text("拖动两张卡片到下方配对区" if not state.is_locked else "配对错误，请稍候再试", color="#D9E8E2" if not state.is_locked else "#F4B5AE", size=14)
+        content = ft.Column([ft.Container(ft.Column([hud, countdown, hint], spacing=10), bgcolor=colors.HOUSE_GREEN, border_radius=18, padding=16), grid, target], expand=True, spacing=16, scroll=ft.ScrollMode.AUTO)
         self.page.clean(); self.page.add(self.shell(content, dark=True)); self.page.update()
 
     def show_level_result(self):
