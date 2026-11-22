@@ -8,7 +8,7 @@ Python + Flet implementation of the concept matching elimination game.
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
-python -m flet run src/main.py --web
+flet run src/main.py --web
 ```
 
 Set `CSV_URL` to a published CSV endpoint before starting. A sample URL is included in `.env.example`.
