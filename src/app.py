@@ -39,7 +39,9 @@ class App:
         self.scores: list[Score] = []
         self.loading = False
         self.pair_zone_hover = False
-        self.pair_zone_visual: ft.Container | None = None
+        self.pair_hover_slot: int | None = None
+        self.pair_slots = [None, None]
+        self.pair_zone_visuals: list[ft.Container] = []
         self.feedback_status: str | None = None
         self.feedback_cards = []
         self.feedback_explanation: str | None = None
@@ -163,6 +165,8 @@ class App:
         self.feedback_cards = []
         self.feedback_explanation = None
         self.pair_zone_hover = False
+        self.pair_hover_slot = None
+        self.pair_slots = [None, None]
         self.show_game()
         self.page.run_task(self.timer_loop, self.engine)
 
@@ -183,6 +187,7 @@ class App:
             return
         # The pointer has left the drop target once a card is released.
         self.pair_zone_hover = False
+        self.pair_hover_slot = None
         card_id = str(card_id)
         candidate = self.engine.card(card_id)
         if candidate is None:
@@ -195,6 +200,8 @@ class App:
             self.feedback_explanation = None
             self.feedback_cards = [self.engine.card(item_id) for item_id in selected_before + [card_id]]
             self.feedback_cards = [card for card in self.feedback_cards if card is not None]
+            self.pair_slots = list(self.feedback_cards[:2]) + [None, None]
+            self.pair_slots = self.pair_slots[:2]
             self.refresh_game()
             self.page.run_task(self.resolve_feedback)
         elif result == "matched":
@@ -204,6 +211,8 @@ class App:
                 previous = self.engine.card(selected_before[0])
                 if previous:
                     self.feedback_cards.insert(0, previous)
+            self.pair_slots = list(self.feedback_cards[:2]) + [None, None]
+            self.pair_slots = self.pair_slots[:2]
             question_explanations = [card.explanation for card in self.feedback_cards if card.type == "question" and card.explanation]
             self.feedback_explanation = question_explanations[0] if question_explanations else next((card.explanation for card in self.feedback_cards if card.explanation), None)
             # Successful pairs are also locked during the 700ms feedback.
@@ -211,6 +220,7 @@ class App:
             self.refresh_game()
             self.page.run_task(self.resolve_feedback)
         else:
+            self.pair_slots[0] = candidate
             self.refresh_game()
 
     def pair_zone_accepts(self, event) -> bool:
@@ -221,35 +231,44 @@ class App:
         card = self.engine.card(card_id)
         return card is not None and not card.is_matched and card_id not in self.engine.state.selected_card_ids and not self.engine.state.is_locked
 
-    def pair_zone_will_accept(self, event) -> bool:
+    def pair_zone_will_accept(self, event, slot_index: int) -> bool:
         accepted = self.pair_zone_accepts(event)
         self.pair_zone_hover = accepted
-        self.update_pair_zone_visual()
+        self.pair_hover_slot = slot_index if accepted else None
+        self.update_pair_zone_visuals()
         # Do not rebuild the page from inside Flet's hit-test callback. A
         # rebuild here invalidates the active drag target and causes the card
         # to snap back, especially on the third row of level two.
         return accepted
 
-    def pair_zone_leave(self, _event):
-        self.pair_zone_hover = False
-        self.update_pair_zone_visual()
+    def pair_zone_leave(self, _event, slot_index: int):
+        if self.pair_hover_slot == slot_index:
+            self.pair_zone_hover = False
+            self.pair_hover_slot = None
+            self.update_pair_zone_visuals()
 
-    def update_pair_zone_visual(self):
-        if not self.pair_zone_visual:
+    def update_pair_zone_visuals(self):
+        if not self.pair_zone_visuals:
             return
-        selected = bool(self.engine and self.engine.state.selected_card_ids)
-        if self.feedback_status == "success":
-            background, border = colors.GREEN_LIGHT, colors.GREEN_ACCENT
-        elif self.feedback_status == "error":
-            background, border = "#fbe9e7", colors.ERROR
-        elif self.pair_zone_hover or selected:
-            background, border = colors.GREEN_LIGHT, colors.GREEN_ACCENT
-        else:
-            background, border = colors.WHITE, colors.HAIRLINE
-        self.pair_zone_visual.bgcolor = background
-        self.pair_zone_visual.border = ft.Border.all(2 if self.pair_zone_hover or selected or self.feedback_status else 1, border)
-        if self.pair_zone_visual.page:
-            self.pair_zone_visual.update()
+        for index, visual in enumerate(self.pair_zone_visuals):
+            occupied = self.pair_slots[index] is not None
+            is_hovered = self.pair_zone_hover and self.pair_hover_slot == index
+            if self.feedback_status == "success":
+                background, border = colors.GREEN_LIGHT, colors.GREEN_ACCENT
+            elif self.feedback_status == "error":
+                background, border = "#fbe9e7", colors.ERROR
+            elif is_hovered or occupied:
+                background, border = colors.GREEN_LIGHT, colors.GREEN_ACCENT
+            else:
+                background, border = colors.WHITE, colors.HAIRLINE
+            visual.bgcolor = background
+            visual.border = ft.Border.all(2 if is_hovered or occupied or self.feedback_status else 1, border)
+            try:
+                visual.update()
+            except RuntimeError:
+                # Initial construction happens before the control is attached;
+                # the assigned properties will be sent with the page update.
+                pass
 
     @staticmethod
     def drag_card_id(event) -> str | None:
@@ -276,7 +295,9 @@ class App:
             self.engine.state.is_locked = False
         self.feedback_status = None
         self.feedback_cards = []
+        self.pair_slots = [None, None]
         self.pair_zone_hover = False
+        self.pair_hover_slot = None
         if was_success and self.engine.state.is_finished:
             self.show_level_result()
         else:
@@ -296,38 +317,29 @@ class App:
         state = self.engine.state
         duration = self.level_data.duration_seconds if self.level_data else max(1, state.remaining_seconds)
         progress = max(0.0, min(1.0, 1 - state.remaining_seconds / duration))
-        selected_ids = set(state.selected_card_ids)
+        selected_ids = {card.id for card in self.pair_slots if card is not None}
         feedback_ids = {card.id for card in self.feedback_cards}
         available_cards = [card for card in state.cards if card.id not in selected_ids and card.id not in feedback_ids]
         cards = [game_card(card, selected=False, width=78, height=132) for card in available_cards]
-        visible_pair_cards = self.feedback_cards if self.feedback_status else [card for card in state.cards if card.id in selected_ids]
-        pairing_cards = [game_card(card, selected=True, draggable=False, width=108, height=104) for card in visible_pair_cards]
-        pairing_content = ft.Row(pairing_cards, alignment=ft.MainAxisAlignment.CENTER, spacing=10) if pairing_cards else ft.Text("将第一张卡片拖到这里", size=13, color=colors.INK_LIGHT)
-        target_visual = ft.Container(
-            ft.Column([
-                ft.Text("配对区", size=18, weight=ft.FontWeight.W_600, color=colors.HOUSE_GREEN),
-                pairing_content,
-                ft.Text("再拖入一张相关卡片即可判定", size=12, color=colors.INK_LIGHT),
-            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=5),
-            bgcolor=colors.GREEN_LIGHT if self.feedback_status == "success" or self.pair_zone_hover else "#fbe9e7" if self.feedback_status == "error" else colors.WHITE,
-            border=ft.Border.all(2 if self.feedback_status or self.pair_zone_hover else 1, colors.GREEN_ACCENT if self.feedback_status == "success" or self.pair_zone_hover else colors.ERROR if self.feedback_status == "error" else colors.HAIRLINE),
-            border_radius=18,
-            padding=12,
-            height=150,
-            width=400,
-            alignment=ft.Alignment(0, 0),
-        )
-        self.pair_zone_visual = target_visual
-        # The target is deliberately taller than the visible panel. The extra
-        # 20px above/below acts as a touch-safe drop margin, while the visual
-        # panel remains centered inside it.
-        target = ft.DragTarget(
-            group="cards",
-            on_will_accept=self.pair_zone_will_accept,
-            on_accept=lambda event: self.on_card(self.drag_card_id(event)),
-            on_leave=self.pair_zone_leave,
-            content=ft.Container(target_visual, width=400, height=190, alignment=ft.Alignment(0, 0)),
-        )
+        self.pair_zone_visuals = []
+        targets = []
+        for slot_index in range(2):
+            slot_card = self.pair_slots[slot_index]
+            slot_content = game_card(slot_card, selected=True, draggable=False, width=128, height=104) if slot_card else ft.Text("拖入卡片" if slot_index == 0 else "第二张卡", size=13, color=colors.INK_LIGHT)
+            target_visual = ft.Container(
+                ft.Column([ft.Text("左区" if slot_index == 0 else "右区", size=16, weight=ft.FontWeight.W_600, color=colors.HOUSE_GREEN), slot_content], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=8),
+                bgcolor=colors.WHITE,
+                border=ft.Border.all(1, colors.HAIRLINE),
+                border_radius=18,
+                padding=12,
+                height=150,
+                width=190,
+                alignment=ft.Alignment(0, 0),
+            )
+            self.pair_zone_visuals.append(target_visual)
+            targets.append(ft.DragTarget(group="cards", on_will_accept=lambda event, i=slot_index: self.pair_zone_will_accept(event, i), on_accept=lambda event: self.on_card(self.drag_card_id(event)), on_leave=lambda event, i=slot_index: self.pair_zone_leave(event, i), content=target_visual))
+        self.update_pair_zone_visuals()
+        target = ft.Row(targets, alignment=ft.MainAxisAlignment.CENTER, spacing=10)
         # Build rows explicitly instead of relying on GridView's aspect-ratio
         # calculation. This keeps the visual cards and their hit regions from
         # extending into the pairing target below.
