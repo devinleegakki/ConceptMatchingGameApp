@@ -12,6 +12,8 @@ from theme import colors, typography
 from theme.styles import dark_button, primary_button, secondary_button
 
 DEFAULT_CSV_URL = "https://docs.google.com/spreadsheets/d/1f055xrnz5R1XLxFZ6zxACPGBSYEZ_4s-ee0GUERpTC4/export?format=csv"
+IPHONE_17_PRO_MAX_WIDTH = 440
+IPHONE_17_PRO_MAX_HEIGHT = 956
 
 
 @dataclass
@@ -27,7 +29,8 @@ class App:
     def __init__(self, page: ft.Page):
         self.page = page
         self.page.title = "概念配对 · Concept Match"
-        self.page.bgcolor = colors.NEUTRAL_WARM
+        self.is_web_preview = bool(getattr(page, "web", False))
+        self.page.bgcolor = "#d9d5ce" if self.is_web_preview else colors.NEUTRAL_WARM
         self.page.padding = 0
         self.page.theme = ft.Theme(font_family=typography.FONT_FAMILY)
         self.csv_url = os.getenv("CSV_URL", DEFAULT_CSV_URL)
@@ -61,7 +64,21 @@ class App:
         )
 
     def shell(self, content: ft.Control, *, dark: bool = False) -> ft.Control:
-        return ft.Column([self.top_bar(dark), ft.Container(content, padding=20, expand=True)], expand=True, spacing=0)
+        app_surface = ft.Column([self.top_bar(dark), ft.Container(content, padding=20, expand=True)], expand=True, spacing=0)
+        if not self.is_web_preview:
+            return app_surface
+        # Keep browser previews at the logical iPhone 17 Pro Max viewport even
+        # when the browser window is a wide desktop rectangle.
+        device = ft.Container(
+            app_surface,
+            width=IPHONE_17_PRO_MAX_WIDTH,
+            height=IPHONE_17_PRO_MAX_HEIGHT,
+            bgcolor=colors.NEUTRAL_WARM,
+            border_radius=28,
+            clip_behavior=ft.ClipBehavior.HARD_EDGE,
+            shadow=ft.BoxShadow(blur_radius=24, spread_radius=2, color="#52000000", offset=ft.Offset(0, 8)),
+        )
+        return ft.Row([device], alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.CENTER, expand=True)
 
     def show_home(self, error: str | None = None):
         self.page.clean()
