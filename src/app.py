@@ -193,6 +193,11 @@ class App:
         if candidate is None:
             return
         selected_before = list(self.engine.state.selected_card_ids)
+        # Keep immutable display snapshots before the engine marks a successful
+        # pair as matched. The feedback UI must show both cards during the
+        # 700ms confirmation window.
+        first_snapshot = self.engine.card(selected_before[0]) if selected_before else None
+        second_snapshot = candidate
         result = self.engine.select(card_id)
         if result == "mismatch":
             self.feedback_status = "error"
@@ -206,11 +211,7 @@ class App:
             self.page.run_task(self.resolve_feedback)
         elif result == "matched":
             self.feedback_status = "success"
-            self.feedback_cards = [candidate]
-            if selected_before:
-                previous = self.engine.card(selected_before[0])
-                if previous:
-                    self.feedback_cards.insert(0, previous)
+            self.feedback_cards = [card for card in (first_snapshot, second_snapshot) if card is not None]
             self.pair_slots = list(self.feedback_cards[:2]) + [None, None]
             self.pair_slots = self.pair_slots[:2]
             question_explanations = [card.explanation for card in self.feedback_cards if card.type == "question" and card.explanation]

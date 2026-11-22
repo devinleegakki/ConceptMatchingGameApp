@@ -21,6 +21,17 @@ def test_matching_increments_combo_and_finishes():
     assert game.state.steps == 1
 
 
+def test_pair_feedback_snapshots_remain_visible_after_engine_matches():
+    game = engine()
+    pair = [card for card in game.state.cards if card.pair_id == "a"]
+    first_snapshot, second_snapshot = pair
+    game.select(first_snapshot.id)
+    assert game.select(second_snapshot.id) == "matched"
+    assert not first_snapshot.is_matched
+    assert not second_snapshot.is_matched
+    assert all(card.is_matched for card in game.state.cards if card.pair_id == "a")
+
+
 def test_mismatch_locks_then_resolves():
     game = engine()
     a = next(card.id for card in game.state.cards if card.pair_id == "a")
