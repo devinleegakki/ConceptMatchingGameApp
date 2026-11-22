@@ -38,7 +38,26 @@ class App:
         self.level_data: LevelData | None = None
         self.scores: list[Score] = []
         self.loading = False
+        self._web_connected = True
+        if self.is_web_preview:
+            self.page.on_connect = self._on_web_connect
+            self.page.on_disconnect = self._on_web_disconnect
         self.show_home()
+
+    def _on_web_connect(self, _event):
+        # A refresh/reconnect within the grace period keeps the dev server alive.
+        self._web_connected = True
+
+    def _on_web_disconnect(self, _event):
+        self._web_connected = False
+        self.page.run_task(self._exit_after_disconnect)
+
+    async def _exit_after_disconnect(self):
+        # Flet sends disconnect before a browser refresh can reconnect. Keep a
+        # small grace period so normal reloads do not kill the terminal.
+        await asyncio.sleep(1.5)
+        if not self._web_connected:
+            os._exit(0)
 
     def top_bar(self, dark: bool = False) -> ft.Control:
         bg = colors.BLACK if dark else colors.HOUSE_GREEN
