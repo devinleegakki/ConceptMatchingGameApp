@@ -128,7 +128,7 @@ class App:
         if not self.engine:
             return
         state = self.engine.state
-        cards = [game_card(card, self.on_card) for card in state.cards]
+        cards = [game_card(card, self.on_card, selected=card.id in state.selected_card_ids) for card in state.cards]
         selected = ", ".join(state.selected_card_ids) if state.selected_card_ids else "等待第二张卡"
         target = ft.DragTarget(
             group="cards",
@@ -151,7 +151,8 @@ class App:
             ft.Text(f"步数 {state.steps}", color=colors.SURFACE),
             ft.Text(f"连击 ×{state.combo}", color=colors.NAV_GOLD, weight=ft.FontWeight.BOLD),
         ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
-        content = ft.Column([ft.Container(hud, bgcolor=colors.CARBON, padding=10), target, grid], expand=True, spacing=12)
+        hint = ft.Text("卡片内容已全部显示：请选择一张题目和对应公式" if not state.is_locked else "配对错误，卡片保持可见；请稍候再选", color=colors.ERROR if state.is_locked else colors.INK, size=12, weight=ft.FontWeight.BOLD)
+        content = ft.Column([ft.Container(hud, bgcolor=colors.CARBON, padding=10), hint, target, grid], expand=True, spacing=12)
         self.page.clean()
         self.page.add(self.shell(content))
         self.page.update()

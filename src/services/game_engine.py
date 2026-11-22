@@ -20,7 +20,6 @@ class GameEngine:
         card = self.card(card_id)
         if card.is_matched or card_id in state.selected_card_ids:
             return "ignored"
-        state.cards = [card.face_up() if item.id == card_id else item for item in state.cards]
         state.selected_card_ids.append(card_id)
         if len(state.selected_card_ids) < 2:
             return "selected"
@@ -40,8 +39,6 @@ class GameEngine:
         return "mismatch"
 
     def resolve_mismatch(self) -> None:
-        selected = set(self.state.selected_card_ids)
-        self.state.cards = [item.face_down() if item.id in selected else item for item in self.state.cards]
         self.state.selected_card_ids.clear()
         self.state.is_locked = False
 

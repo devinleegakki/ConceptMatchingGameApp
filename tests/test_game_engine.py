@@ -11,6 +11,7 @@ def engine():
 
 def test_matching_increments_combo_and_finishes():
     game = engine()
+    assert all(card.is_face_up for card in game.state.cards)
     ids = {card.pair_id: [card.id for card in game.state.cards if card.pair_id == card.pair_id] for card in game.state.cards}
     a = [card.id for card in game.state.cards if card.pair_id == "a"]
     assert game.select(a[0]) == "selected"
@@ -30,6 +31,7 @@ def test_mismatch_locks_then_resolves():
     game.resolve_mismatch()
     assert not game.state.is_locked
     assert game.state.combo == 0
+    assert all(card.is_face_up for card in game.state.cards)
 
 
 def test_tick_fails_at_zero():

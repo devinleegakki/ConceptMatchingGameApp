@@ -8,7 +8,9 @@ class Card:
     type: str
     content: str
     explanation: str | None = None
-    is_face_up: bool = False
+    # Cards are readable from the start; this game tests concept association,
+    # rather than memory of hidden cards.
+    is_face_up: bool = True
     is_matched: bool = False
 
     def face_up(self) -> "Card":
@@ -18,7 +20,7 @@ class Card:
         return Card(self.id, self.pair_id, self.type, self.content, self.explanation, True, True)
 
     def face_down(self) -> "Card":
-        return Card(self.id, self.pair_id, self.type, self.content, self.explanation, False, self.is_matched)
+        return self
 
 
 @dataclass(frozen=True)
