@@ -207,13 +207,37 @@ class App:
         duration = self.level_data.duration_seconds if self.level_data else max(1, state.remaining_seconds)
         progress = max(0.0, min(1.0, 1 - state.remaining_seconds / duration))
         selected_ids = set(state.selected_card_ids)
-        cards = [game_card(card, selected=card.id in selected_ids, width=78, height=132) for card in state.cards if card.id not in selected_ids]
+        available_cards = [card for card in state.cards if card.id not in selected_ids]
+        cards = [game_card(card, selected=False, width=78, height=132) for card in available_cards]
         pairing_cards = [game_card(card, selected=True, draggable=False, width=108, height=104) for card in state.cards if card.id in selected_ids]
         pairing_content = ft.Row(pairing_cards, alignment=ft.MainAxisAlignment.CENTER, spacing=10) if pairing_cards else ft.Text("将第一张卡片拖到这里", size=13, color=colors.INK_LIGHT)
-        target = ft.DragTarget(group="cards", on_accept=lambda event: self.on_card(self.drag_card_id(event)), content=ft.Container(ft.Column([ft.Text("配对区", size=18, weight=ft.FontWeight.W_600, color=colors.HOUSE_GREEN), pairing_content, ft.Text("再拖入一张相关卡片即可判定", size=12, color=colors.INK_LIGHT)], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=5), bgcolor=colors.GREEN_LIGHT if selected_ids else colors.WHITE, border=ft.Border.all(2 if selected_ids else 1, colors.GREEN_ACCENT if selected_ids else colors.HAIRLINE), border_radius=18, padding=12, height=150, alignment=ft.Alignment(0, 0)))
-        grid_height = 284 if len(state.cards) <= 8 else 426
-        grid = ft.GridView(height=grid_height, runs_count=4, max_extent=96, spacing=8, run_spacing=10, child_aspect_ratio=0.59)
-        grid.controls = cards
+        target = ft.DragTarget(
+            group="cards",
+            on_will_accept=lambda _: True,
+            on_accept=lambda event: self.on_card(self.drag_card_id(event)),
+            content=ft.Container(
+                ft.Column([
+                    ft.Text("配对区", size=18, weight=ft.FontWeight.W_600, color=colors.HOUSE_GREEN),
+                    pairing_content,
+                    ft.Text("再拖入一张相关卡片即可判定", size=12, color=colors.INK_LIGHT),
+                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=5),
+                bgcolor=colors.GREEN_LIGHT if selected_ids else colors.WHITE,
+                border=ft.Border.all(2 if selected_ids else 1, colors.GREEN_ACCENT if selected_ids else colors.HAIRLINE),
+                border_radius=18,
+                padding=12,
+                height=150,
+                width=400,
+                alignment=ft.Alignment(0, 0),
+            ),
+        )
+        # Build rows explicitly instead of relying on GridView's aspect-ratio
+        # calculation. This keeps the visual cards and their hit regions from
+        # extending into the pairing target below.
+        card_rows = [
+            ft.Row(cards[index:index + 4], alignment=ft.MainAxisAlignment.CENTER, spacing=8)
+            for index in range(0, len(cards), 4)
+        ]
+        grid = ft.Column(card_rows, horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=10)
         hud = ft.Row([ft.Text(f"LEVEL {state.level}", color=colors.WHITE, weight=ft.FontWeight.W_600, size=13), ft.Text(f"步数 {state.steps}", color=colors.WHITE, size=13), ft.Text(f"连击 ×{state.combo}", color=colors.WHITE, size=13), ft.Text(f"{state.remaining_seconds}s", color=colors.WHITE, weight=ft.FontWeight.W_600, size=13)], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
         countdown = ft.ProgressBar(value=progress, bar_height=8, color=colors.GREEN_LIGHT, bgcolor=colors.GREEN_UPLIFT, border_radius=8, semantics_label="关卡倒计时进度", semantics_value=f"{state.remaining_seconds}秒剩余")
         hint = ft.Text("拖动两张卡片到下方配对区" if not state.is_locked else "配对错误，请稍候再试", color="#D9E8E2" if not state.is_locked else "#F4B5AE", size=14)
