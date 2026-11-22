@@ -10,14 +10,17 @@ class GameEngine:
         (rng or random).shuffle(cards)
         self.state = GameState(level_data.level, cards, [], 0, level_data.duration_seconds)
 
-    def card(self, card_id: str) -> Card:
-        return next(card for card in self.state.cards if card.id == card_id)
+    def card(self, card_id: str) -> Card | None:
+        return next((card for card in self.state.cards if card.id == str(card_id)), None)
 
     def select(self, card_id: str) -> str:
         state = self.state
         if state.is_locked or state.is_finished or state.is_failed:
             return "ignored"
         card = self.card(card_id)
+        if card is None:
+            return "ignored"
+        card_id = str(card_id)
         if card.is_matched or card_id in state.selected_card_ids:
             return "ignored"
         state.selected_card_ids.append(card_id)
@@ -25,6 +28,9 @@ class GameEngine:
             return "selected"
         state.steps += 1
         first, second = (self.card(item_id) for item_id in state.selected_card_ids)
+        if first is None or second is None:
+            state.selected_card_ids.clear()
+            return "ignored"
         if first.pair_id == second.pair_id:
             state.cards = [item.matched() if item.id in state.selected_card_ids else item for item in state.cards]
             state.matched_pairs += 1

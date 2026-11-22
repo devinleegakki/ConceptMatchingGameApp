@@ -171,9 +171,22 @@ class App:
 
     def on_card(self, card_id: str):
         if not self.engine: return
-        result = self.engine.select(card_id); self.refresh_game()
+        if card_id is None:
+            return
+        result = self.engine.select(str(card_id)); self.refresh_game()
         if result == "mismatch": self.page.run_task(self.resolve_mismatch)
         elif result == "matched" and self.engine.state.is_finished: self.page.run_task(self.finish_level)
+
+    @staticmethod
+    def drag_card_id(event) -> str | None:
+        """Read drag data across Flet web/desktop event representations."""
+        data = getattr(event, "data", None)
+        if data is None:
+            source = getattr(event, "src", None)
+            data = getattr(source, "data", None)
+        if data is None:
+            return None
+        return str(data)
 
     async def resolve_mismatch(self):
         await asyncio.sleep(0.7)
@@ -197,7 +210,7 @@ class App:
         cards = [game_card(card, selected=card.id in selected_ids, width=78, height=132) for card in state.cards if card.id not in selected_ids]
         pairing_cards = [game_card(card, selected=True, draggable=False, width=108, height=104) for card in state.cards if card.id in selected_ids]
         pairing_content = ft.Row(pairing_cards, alignment=ft.MainAxisAlignment.CENTER, spacing=10) if pairing_cards else ft.Text("将第一张卡片拖到这里", size=13, color=colors.INK_LIGHT)
-        target = ft.DragTarget(group="cards", on_accept=lambda event: self.on_card(event.data), content=ft.Container(ft.Column([ft.Text("配对区", size=18, weight=ft.FontWeight.W_600, color=colors.HOUSE_GREEN), pairing_content, ft.Text("再拖入一张相关卡片即可判定", size=12, color=colors.INK_LIGHT)], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=5), bgcolor=colors.GREEN_LIGHT if selected_ids else colors.WHITE, border=ft.Border.all(2 if selected_ids else 1, colors.GREEN_ACCENT if selected_ids else colors.HAIRLINE), border_radius=18, padding=12, height=150, alignment=ft.Alignment(0, 0)))
+        target = ft.DragTarget(group="cards", on_accept=lambda event: self.on_card(self.drag_card_id(event)), content=ft.Container(ft.Column([ft.Text("配对区", size=18, weight=ft.FontWeight.W_600, color=colors.HOUSE_GREEN), pairing_content, ft.Text("再拖入一张相关卡片即可判定", size=12, color=colors.INK_LIGHT)], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=5), bgcolor=colors.GREEN_LIGHT if selected_ids else colors.WHITE, border=ft.Border.all(2 if selected_ids else 1, colors.GREEN_ACCENT if selected_ids else colors.HAIRLINE), border_radius=18, padding=12, height=150, alignment=ft.Alignment(0, 0)))
         grid_height = 284 if len(state.cards) <= 8 else 426
         grid = ft.GridView(height=grid_height, runs_count=4, max_extent=96, spacing=8, run_spacing=10, child_aspect_ratio=0.59)
         grid.controls = cards

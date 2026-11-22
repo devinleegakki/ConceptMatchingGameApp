@@ -41,3 +41,9 @@ def test_tick_fails_at_zero():
     assert game.state.is_failed
     assert game.state.is_finished
 
+
+def test_unknown_drag_id_is_ignored_without_exception():
+    game = engine()
+    assert game.select(None) == "ignored"
+    assert game.select("missing-card") == "ignored"
+
