@@ -5,6 +5,7 @@ __pycache__/
 .flet/
 build/
 dist/
+src/.flet/
 *.apk
 *.aab
 .env
