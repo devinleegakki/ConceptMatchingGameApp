@@ -55,6 +55,8 @@ class App:
         self.pair_locked_type: str | None = None
         self.pair_zone_visuals: list[ft.Container] = []
         self.pair_workspace_visual: ft.Container | None = None
+        self.game_timer_text: ft.Text | None = None
+        self.game_countdown: ft.ProgressBar | None = None
         self.pair_hover_card_id: str | None = None
         self.feedback_status: str | None = None
         self.feedback_cards = []
@@ -335,8 +337,25 @@ class App:
             await asyncio.sleep(1)
             if self.engine is not engine: return
             if engine.tick():
-                self.refresh_game()
-                if engine.state.is_finished: await self.finish_level()
+                self.update_timer_controls(engine)
+                if engine.state.is_finished:
+                    await self.finish_level()
+
+    def update_timer_controls(self, engine: GameEngine):
+        """Update only the live timer widgets; rebuilding the game tree causes flicker."""
+        if self.level_data is None:
+            return
+        duration = max(1, self.level_data.duration_seconds)
+        progress = max(0.0, min(1.0, 1 - engine.state.remaining_seconds / duration))
+        if self.game_timer_text is not None:
+            self.game_timer_text.value = f"{engine.state.remaining_seconds}s"
+        if self.game_countdown is not None:
+            self.game_countdown.value = progress
+            self.game_countdown.semantics_value = f"{engine.state.remaining_seconds}秒剩余"
+        try:
+            self.page.update()
+        except RuntimeError:
+            pass
 
     def on_card(self, card_id: str):
         if not self.engine or self.feedback_status or card_id is None:
@@ -572,7 +591,9 @@ class App:
         ]
         grid = surface(ft.Column(card_rows, horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=10), padding=12)
         hud = ft.Row([ft.Column([text(f"LEVEL {state.level}", 12, color="#b7d7ca", weight=ft.FontWeight.W_700), text(f"第 {state.level} 关", 20, color=colors.WHITE, weight=ft.FontWeight.W_700)], spacing=3), ft.Row([badge(f"步数 {state.steps}", fill="#2b5148", color="#d9e8e2"), badge(f"连击 ×{state.combo}", fill=colors.GOLD, color=colors.HOUSE_GREEN)], spacing=6)], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
+        self.game_timer_text = text(f"{state.remaining_seconds}s", 13, color=colors.GOLD, weight=ft.FontWeight.W_700)
         countdown = ft.ProgressBar(value=progress, bar_height=9, color=colors.GOLD, bgcolor=colors.GREEN_UPLIFT, border_radius=8, semantics_label="关卡倒计时进度", semantics_value=f"{state.remaining_seconds}秒剩余")
+        self.game_countdown = countdown
         if self.feedback_status == "success":
             hint_text, hint_color = "配对成功 · 继续保持节奏", colors.GREEN_LIGHT
         elif self.feedback_status == "error":
@@ -591,7 +612,8 @@ class App:
             visible=bool(self.feedback_explanation),
         )
         feedback = ft.Container(hint, bgcolor=colors.ERROR_SURFACE if self.feedback_status == "error" else colors.SUCCESS_SURFACE if self.feedback_status == "success" else colors.HOUSE_GREEN, border_radius=12, padding=10)
-        content = ft.Column([ft.Container(ft.Column([hud, countdown, feedback], spacing=12), bgcolor=colors.HOUSE_GREEN, border_radius=22, padding=16), grid, target, explanation_view], expand=True, spacing=14, scroll=ft.ScrollMode.AUTO)
+        countdown_row = ft.Row([text("剩余时间", 12, color="#d9e8e2"), self.game_timer_text], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
+        content = ft.Column([ft.Container(ft.Column([hud, countdown_row, countdown, feedback], spacing=12), bgcolor=colors.HOUSE_GREEN, border_radius=22, padding=16), grid, target, explanation_view], expand=True, spacing=14, scroll=ft.ScrollMode.AUTO)
         self.page.clean(); self.page.add(self.shell(content, dark=True)); self.page.update()
 
     def show_level_result(self):
