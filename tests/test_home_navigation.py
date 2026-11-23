@@ -37,3 +37,10 @@ def test_home_page_change_uses_same_indicator_state():
     assert app.home_page_index == 1
     assert app.home_page_dots[1].width == 22
     assert app.home_page_dots[0].width == 7
+
+
+def test_home_page_change_wraps_duplicate_first_page_to_first_index():
+    app = make_home_app()
+    app.on_home_page_change(SimpleNamespace(control=SimpleNamespace(selected_index=3, update=lambda: None)), app.home_page_dots)
+
+    assert app.home_page_index == 0
