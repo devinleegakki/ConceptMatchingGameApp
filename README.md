@@ -46,7 +46,7 @@ The app intentionally keeps the CSV endpoint configurable so the same build can 
 
 Flet can install or download missing JDK and Android SDK components during the first build, but the machine must have network access and permission to install them.
 
-### Lightweight ARM64 build
+### Local-test ARM64 APK build
 
 Run these commands from the project root in PowerShell:
 
@@ -61,7 +61,7 @@ $env:CSV_URL = "https://example.invalid/export.csv"
 
 $env:PYTHONIOENCODING = "utf-8"
 $env:FLET_CLI_LOG_FORMAT = "plain"
-.\scripts\build_android_release.ps1 -Target apk
+.\scripts\build_android_release.ps1
 ```
 
 The APK is written to `build/apk/concept_match.apk`; the matching SHA-1 file is written beside it. Check the artifact and calculate a stronger delivery checksum with:
@@ -91,7 +91,7 @@ Always run the test suite before reporting a build complete:
 python -m pytest -q
 ```
 
-The release script builds only `arm64-v8a`, excludes Flet temporary files and test dependencies, and cleans old build directories first. For Google Play, use `.\scripts\build_android_release.ps1 -Target aab` so the store can split delivery by device architecture. The APK build itself does not validate the remote CSV contents; verify that `CSV_URL` is reachable and that the CSV follows the schema above when testing the installed app.
+The release script builds only `arm64-v8a`, excludes Flet temporary files and test dependencies, and cleans old build directories first. This project is configured for local Android testing only; it does not build an AAB or publish to Google Play. The APK build itself does not validate the remote CSV contents; verify that `CSV_URL` is reachable and that the CSV follows the schema above when testing the installed app.
 
 On Windows, the script automatically stages the project in `C:\concept_match_build` when the workspace path contains non-ASCII characters, then copies the final artifact back to the workspace.
 
