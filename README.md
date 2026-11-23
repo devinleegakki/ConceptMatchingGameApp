@@ -28,6 +28,7 @@ Each level must contain 8 cards (level 1) or 12 cards (level 2), and every pair 
 ## Test
 
 ```powershell
+python -m pip install -r requirements-dev.txt
 python -m pytest -q
 ```
 
@@ -45,14 +46,14 @@ The app intentionally keeps the CSV endpoint configurable so the same build can 
 
 Flet can install or download missing JDK and Android SDK components during the first build, but the machine must have network access and permission to install them.
 
-### Standard APK build
+### Lightweight ARM64 build
 
 Run these commands from the project root in PowerShell:
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
+python -m pip install -r requirements-dev.txt
 python -m pytest -q
 
 # Optional: configure the CSV source for this build/session.
@@ -60,11 +61,7 @@ $env:CSV_URL = "https://example.invalid/export.csv"
 
 $env:PYTHONIOENCODING = "utf-8"
 $env:FLET_CLI_LOG_FORMAT = "plain"
-flet build apk --yes --no-rich-output --skip-flutter-doctor `
-  -o build\apk `
-  --project concept_match `
-  --product ConceptMatch `
-  --description ConceptMatch
+.\scripts\build_android_release.ps1 -Target apk
 ```
 
 The APK is written to `build/apk/concept_match.apk`; the matching SHA-1 file is written beside it. Check the artifact and calculate a stronger delivery checksum with:
@@ -94,5 +91,7 @@ Always run the test suite before reporting a build complete:
 python -m pytest -q
 ```
 
-The verified build completed with `23 passed`. The resulting APK was approximately 172 MB. The APK build itself does not validate the remote CSV contents; verify that `CSV_URL` is reachable and that the CSV follows the schema above when testing the installed app.
+The release script builds only `arm64-v8a`, excludes Flet temporary files and test dependencies, and cleans old build directories first. For Google Play, use `.\scripts\build_android_release.ps1 -Target aab` so the store can split delivery by device architecture. The APK build itself does not validate the remote CSV contents; verify that `CSV_URL` is reachable and that the CSV follows the schema above when testing the installed app.
+
+On Windows, the script automatically stages the project in `C:\concept_match_build` when the workspace path contains non-ASCII characters, then copies the final artifact back to the workspace.
 
