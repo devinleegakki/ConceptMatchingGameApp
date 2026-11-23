@@ -25,3 +25,20 @@ def secondary_button() -> ft.ButtonStyle:
 def dark_button() -> ft.ButtonStyle:
     return pill_style(colors.BLACK, colors.WHITE)
 
+
+def ghost_button() -> ft.ButtonStyle:
+    return pill_style("transparent", colors.WHITE, "#6a8f81")
+
+
+def danger_button() -> ft.ButtonStyle:
+    return pill_style(colors.ERROR, colors.WHITE)
+
+
+def card_style(*, fill: str = colors.WHITE, border: str = colors.HAIRLINE, radius: int = 18) -> dict:
+    return {
+        "bgcolor": fill,
+        "border": ft.Border.all(1, border),
+        "border_radius": radius,
+        "shadow": ft.BoxShadow(blur_radius=12, spread_radius=0, color=colors.SHADOW, offset=ft.Offset(0, 4)),
+    }
+

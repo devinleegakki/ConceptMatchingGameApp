@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import flet as ft
 
 from components.game_card import game_card
+from components.design_system import badge, button, concept_node, hero_visual, illustration_card, pager_title_block, progress_ring, section_title, stat_card, surface, text
 from models.card import LevelData
 from services.csv_loader import DataError, load_level
 from services.game_engine import GameEngine
@@ -32,7 +33,17 @@ class App:
         self.is_web_preview = bool(getattr(page, "web", False))
         self.page.bgcolor = "#d9d5ce" if self.is_web_preview else colors.NEUTRAL_WARM
         self.page.padding = 0
-        self.page.theme = ft.Theme(font_family=typography.FONT_FAMILY)
+        self.page.theme = ft.Theme(
+            font_family=typography.FONT_FAMILY,
+            navigation_bar_theme=ft.NavigationBarTheme(
+                label_text_style={
+                    ft.ControlState.SELECTED: ft.TextStyle(color=colors.HOUSE_GREEN, size=12, weight=ft.FontWeight.W_700),
+                    ft.ControlState.DEFAULT: ft.TextStyle(color=colors.INK_LIGHT, size=12, weight=ft.FontWeight.W_500),
+                },
+                indicator_color=colors.GOLD_SURFACE,
+                overlay_color={ft.ControlState.SELECTED: colors.GOLD_SURFACE, ft.ControlState.DEFAULT: colors.CERAMIC},
+            ),
+        )
         self.csv_url = os.getenv("CSV_URL", DEFAULT_CSV_URL)
         self.engine: GameEngine | None = None
         self.level_data: LevelData | None = None
@@ -41,10 +52,17 @@ class App:
         self.pair_zone_hover = False
         self.pair_hover_slot: int | None = None
         self.pair_slots = [None, None]
+        self.pair_locked_type: str | None = None
         self.pair_zone_visuals: list[ft.Container] = []
+        self.pair_workspace_visual: ft.Container | None = None
+        self.pair_hover_card_id: str | None = None
         self.feedback_status: str | None = None
         self.feedback_cards = []
         self.feedback_explanation: str | None = None
+        self.home_page_index = 0
+        self.home_pager: ft.PageView | None = None
+        self.home_page_dots: list[ft.Container] = []
+        self.leaderboard_entries: list[dict] = []
         self._web_connected = True
         if self.is_web_preview:
             self.page.on_connect = self._on_web_connect
@@ -57,6 +75,9 @@ class App:
 
     def _on_web_disconnect(self, _event):
         self._web_connected = False
+        session = getattr(self.page, "session", None)
+        if session is None or getattr(getattr(session, "connection", None), "loop", None) is None:
+            return
         self.page.run_task(self._exit_after_disconnect)
 
     async def _exit_after_disconnect(self):
@@ -67,13 +88,13 @@ class App:
             os._exit(0)
 
     def top_bar(self, dark: bool = False) -> ft.Control:
-        bg = colors.BLACK if dark else colors.HOUSE_GREEN
+        bg = colors.HOUSE_GREEN if dark else colors.WHITE
         fg = colors.WHITE
         return ft.Container(
             ft.Row(
                 [
-                    ft.Text("CONCEPT MATCH", size=14, weight=ft.FontWeight.W_600, color=fg, font_family=typography.FONT_FAMILY),
-                    ft.Text("学习配对", size=12, color="#B7D7CA", font_family=typography.FONT_FAMILY),
+                    ft.Row([ft.Container(width=10, height=10, bgcolor=colors.GOLD, border_radius=10), ft.Text("CONCEPT MATCH", size=14, weight=ft.FontWeight.W_700, color=fg if dark else colors.HOUSE_GREEN, font_family=typography.FONT_FAMILY)], spacing=8),
+                    ft.Text("学习配对", size=12, color="#B7D7CA" if dark else colors.INK_LIGHT, font_family=typography.FONT_FAMILY),
                 ],
                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             ),
@@ -82,15 +103,14 @@ class App:
         )
 
     def pill(self, label: str, on_click, *, primary: bool = True, dark: bool = False) -> ft.Control:
-        return ft.FilledButton(
-            label,
-            on_click=on_click,
-            style=dark_button() if dark else primary_button() if primary else secondary_button(),
-            height=48,
-        )
+        return button(label, on_click, kind="primary" if primary else "secondary", dark=dark)
 
-    def shell(self, content: ft.Control, *, dark: bool = False) -> ft.Control:
-        app_surface = ft.Column([self.top_bar(dark), ft.Container(content, padding=20, expand=True)], expand=True, spacing=0)
+    def shell(self, content: ft.Control, *, dark: bool = False, show_bottom_nav: bool = False, selected_nav: int = 0) -> ft.Control:
+        body = ft.Container(content, padding=ft.Padding.symmetric(horizontal=18, vertical=16), alignment=ft.Alignment(0, 0), expand=True)
+        controls = [self.top_bar(dark), body]
+        if show_bottom_nav:
+            controls.append(self.bottom_navigation(selected_nav))
+        app_surface = ft.Column(controls, expand=True, spacing=0)
         if not self.is_web_preview:
             return app_surface
         # Keep browser previews at the logical iPhone 17 Pro Max viewport even
@@ -106,49 +126,170 @@ class App:
         )
         return ft.Row([device], alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.CENTER, expand=True)
 
+    def bottom_navigation(self, selected_index: int) -> ft.NavigationBar:
+        return ft.NavigationBar(
+            destinations=[
+                ft.NavigationBarDestination(icon=ft.Icon(ft.Icons.HOME_OUTLINED, color=colors.INK_LIGHT), selected_icon=ft.Icon(ft.Icons.HOME, color=colors.HOUSE_GREEN), label="首页"),
+                ft.NavigationBarDestination(icon=ft.Icon(ft.Icons.LEADERBOARD_OUTLINED, color=colors.INK_LIGHT), selected_icon=ft.Icon(ft.Icons.LEADERBOARD, color=colors.HOUSE_GREEN), label="排行榜"),
+                ft.NavigationBarDestination(icon=ft.Icon(ft.Icons.PERSON_OUTLINED, color=colors.INK_LIGHT), selected_icon=ft.Icon(ft.Icons.PERSON, color=colors.HOUSE_GREEN), label="个人资料"),
+            ],
+            selected_index=selected_index,
+            bgcolor=colors.WHITE,
+            indicator_color=colors.GOLD_SURFACE,
+            label_behavior=ft.NavigationBarLabelBehavior.ALWAYS_SHOW,
+            border=ft.Border(top=ft.BorderSide(1, colors.DIVIDER)),
+            on_change=self.on_navigation_change,
+        )
+
+    def on_navigation_change(self, event):
+        index = int(event.control.selected_index)
+        if index == 0:
+            self.show_home()
+        elif index == 1:
+            self.show_leaderboard()
+        else:
+            self.show_profile()
+
     def show_home(self, error: str | None = None):
         self.page.clean()
         error_view = ft.Container(
-            ft.Row([ft.Icon(ft.Icons.ERROR_OUTLINE, color=colors.ERROR), ft.Text(error or "", color=colors.ERROR, size=14, expand=True)]),
-            bgcolor="#0dc820140d",
+            ft.Row([ft.Icon(ft.Icons.ERROR_OUTLINE, color=colors.ERROR), text(error or "", 14, color=colors.ERROR, max_lines=4)], spacing=10),
+            bgcolor=colors.ERROR_SURFACE,
             border=ft.Border.all(1, colors.ERROR),
-            border_radius=12,
+            border_radius=16,
             padding=14,
             visible=bool(error),
         )
-        hero = ft.Container(
-            ft.Column(
-                [
-                    ft.Text("概念配对", size=40, weight=ft.FontWeight.W_600, color=colors.WHITE, font_family=typography.FONT_FAMILY),
-                    ft.Text("CONCEPT MATCH", size=14, color="#B7D7CA", font_family=typography.FONT_FAMILY),
-                    ft.Container(height=8),
-                    ft.Text("把题目和公式重新连起来。", size=20, color=colors.WHITE, font_family=typography.FONT_FAMILY),
-                    ft.Text("所有卡片都会直接显示信息，你只需要根据概念完成配对。", size=15, color="#D9E8E2", font_family=typography.FONT_FAMILY),
-                    ft.Container(height=8),
-                    ft.Row([self.pill("开始挑战", lambda _: self.start_level(1)), self.pill("玩法说明", lambda _: self.show_instructions(), primary=False)], spacing=10),
-                ], spacing=10,
-            ),
-            bgcolor=colors.HOUSE_GREEN,
-            border_radius=18,
-            padding=28,
+        self.home_page_index = min(max(self.home_page_index, 0), 2)
+        dots = [ft.Container(width=7 if index != self.home_page_index else 22, height=7, bgcolor=colors.GOLD if index == self.home_page_index else "#7da194", border_radius=8, animate=ft.Animation(180, ft.AnimationCurve.EASE_OUT)) for index in range(3)]
+        self.home_page_dots = dots
+        pager = ft.PageView(
+            controls=[self.home_concept_page(), self.home_how_to_page(), self.home_progress_page()],
+            selected_index=self.home_page_index,
+            height=560,
+            expand=True,
+            snap=True,
+            on_change=lambda event: self.on_home_page_change(event, dots),
         )
-        stats = ft.Row([
-            self.info_tile("第 1 关", "4 对卡片"),
-            self.info_tile("第 2 关", "6 对卡片"),
-            self.info_tile("目标", "建立联结"),
-        ], spacing=12)
-        content = ft.Column([hero, error_view, ft.Text("挑战概览", size=24, weight=ft.FontWeight.W_600, color=colors.STARBUCKS_GREEN), stats], spacing=18, scroll=ft.ScrollMode.AUTO)
-        self.page.add(self.shell(content)); self.page.update()
+        self.home_pager = pager
+        pager_container = ft.Container(pager, bgcolor=colors.HOUSE_GREEN, border_radius=26, padding=24, height=610, expand=True, shadow=ft.BoxShadow(blur_radius=18, color="#30001f16", offset=ft.Offset(0, 8)))
+        paging_controls = ft.Row([
+            ft.IconButton(ft.Icons.CHEVRON_LEFT, tooltip="上一页", icon_color="#b7d7ca", bgcolor="#2b5148", on_click=lambda _: self.previous_home_page()),
+            ft.Row(dots, alignment=ft.MainAxisAlignment.CENTER, spacing=6, expand=True),
+            ft.IconButton(ft.Icons.CHEVRON_RIGHT, tooltip="下一页", icon_color="#b7d7ca", bgcolor="#2b5148", on_click=lambda _: self.next_home_page()),
+        ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
+        content = ft.Column([error_view, pager_container, paging_controls], expand=True, spacing=10)
+        self.page.add(self.shell(content, show_bottom_nav=True, selected_nav=0)); self.page.update()
+
+    def on_home_page_change(self, event, dots: list[ft.Container]):
+        self.home_page_index = int(event.control.selected_index)
+        self.update_home_page_indicators(dots)
+
+    def go_to_home_page(self, index: int):
+        self.home_page_index = index % 3
+        if self.home_pager is not None:
+            self.home_pager.selected_index = self.home_page_index
+            try:
+                self.home_pager.update()
+            except RuntimeError:
+                pass
+        self.update_home_page_indicators()
+
+    def next_home_page(self):
+        self.go_to_home_page(self.home_page_index + 1)
+
+    def previous_home_page(self):
+        self.go_to_home_page(self.home_page_index - 1)
+
+    def update_home_page_indicators(self, dots: list[ft.Container] | None = None):
+        dots = dots or self.home_page_dots
+        for index, dot in enumerate(dots):
+            dot.width = 22 if index == self.home_page_index else 7
+            dot.bgcolor = colors.GOLD if index == self.home_page_index else "#7da194"
+            try:
+                dot.update()
+            except RuntimeError:
+                pass
+
+    def home_concept_page(self) -> ft.Control:
+        visual = hero_visual(ft.Row([
+            ft.Column([concept_node(ft.Icons.QUESTION_MARK, size=58, fill=colors.QUESTION_SURFACE, color=colors.GOLD), ft.Container(width=2, height=30, bgcolor="#7da194"), concept_node(ft.Icons.FUNCTIONS, size=58, fill=colors.FORMULA_SURFACE, color=colors.GREEN_ACCENT)], spacing=0, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+            ft.Column([ft.Container(width=82, height=2, bgcolor=colors.GOLD), concept_node(ft.Icons.HUB, size=154, fill=colors.GOLD_SURFACE, color=colors.HOUSE_GREEN), ft.Container(width=82, height=2, bgcolor=colors.GOLD)], spacing=10, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+            ft.Column([concept_node(ft.Icons.SPEED, size=58, fill=colors.FORMULA_SURFACE, color=colors.GREEN_ACCENT), ft.Container(width=2, height=30, bgcolor="#7da194"), concept_node(ft.Icons.LIGHTBULB_OUTLINE, size=58, fill=colors.QUESTION_SURFACE, color=colors.GOLD)], spacing=0, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+        ], alignment=ft.MainAxisAlignment.CENTER, spacing=12), height=250, fill="#2b5148", padding=12)
+        return ft.Container(ft.Column([
+            ft.Row([badge("CONCEPT MATCH", fill="#2b5148", color="#d4e9e2"), text("学习配对", 12, color="#b7d7ca")], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+            visual,
+            pager_title_block("把概念连成一条线。", "拖动题目和公式，找到正确的对应关系。"),
+            ft.Row([self.pill("开始第 1 关", lambda _: self.start_level(1), dark=True)], alignment=ft.MainAxisAlignment.CENTER),
+        ], spacing=16, expand=True), expand=True)
+
+    def home_how_to_page(self) -> ft.Control:
+        visual = hero_visual(ft.Column([
+            ft.Row([illustration_card("题目", "由路程和用时求速度", fill=colors.QUESTION_SURFACE, accent=colors.GOLD), ft.Icon(ft.Icons.ARROW_FORWARD, size=34, color=colors.GOLD), illustration_card("公式", "v = s / t", fill=colors.FORMULA_SURFACE, accent=colors.GREEN_ACCENT)], alignment=ft.MainAxisAlignment.CENTER, spacing=8),
+            ft.Row([ft.Container(ft.Icon(ft.Icons.DRAG_INDICATOR, color=colors.GOLD, size=24), width=44, height=44, bgcolor="#3b665a", border_radius=22, alignment=ft.Alignment(0, 0)), ft.Container(width=84, height=3, bgcolor=colors.GOLD), ft.Container(ft.Icon(ft.Icons.AUTO_AWESOME, color=colors.FOCUS, size=24), width=44, height=44, bgcolor="#3b665a", border_radius=22, alignment=ft.Alignment(0, 0))], alignment=ft.MainAxisAlignment.CENTER, spacing=6),
+        ], spacing=14, horizontal_alignment=ft.CrossAxisAlignment.CENTER), height=250, fill="#2b5148", padding=14)
+        return ft.Container(ft.Column([
+            badge("HOW IT WORKS", fill="#2b5148", color="#d4e8e2"), visual,
+            pager_title_block("看见、拖动、连击。", "所有卡片从一开始就可见，把对应卡片放入工作区。"),
+            ft.Row([self.flow_step("01", "看见", "卡片全部可见"), self.flow_step("02", "拖动", "放入工作区"), self.flow_step("03", "连击", "正确配对加分")], spacing=6),
+        ], spacing=14, expand=True), expand=True)
+
+    def home_progress_page(self) -> ft.Control:
+        completed = sum(1 for score in self.scores if not score.failed)
+        best_combo = max((score.max_combo for score in self.scores), default=0)
+        visual = hero_visual(ft.Row([progress_ring(min(1.0, completed / 2), f"{completed} / 2", size=164), ft.Column([badge("持续积累", fill=colors.GOLD_SURFACE, color=colors.HOUSE_GREEN), text("每次挑战都算数", 14, color="#d9e8e2"), ft.Icon(ft.Icons.TRENDING_UP, size=42, color=colors.GOLD)], spacing=10, horizontal_alignment=ft.CrossAxisAlignment.CENTER)], alignment=ft.MainAxisAlignment.CENTER, spacing=20), height=250, fill="#2b5148", padding=16)
+        return ft.Container(ft.Column([
+            badge("YOUR PROGRESS", fill="#2b5148", color="#d4e9e2"), visual,
+            pager_title_block("你的学习进度", "完成一次挑战后，这里会出现你的记录。"),
+            ft.Row([self.progress_metric("已完成", f"{completed} 关"), self.progress_metric("最高连击", f"×{best_combo}")], spacing=10),
+        ], spacing=14, expand=True), expand=True)
+
+    def progress_metric(self, label: str, value: str) -> ft.Container:
+        return ft.Container(ft.Column([text(label, 12, color="#b7d7ca"), text(value, 21, color=colors.WHITE, weight=ft.FontWeight.W_700)], spacing=3), bgcolor="#2b5148", border_radius=14, padding=12, expand=True)
+
+    def flow_step(self, number: str, title: str, detail: str) -> ft.Container:
+        return ft.Container(ft.Column([badge(number, fill=colors.GOLD_SURFACE, color=colors.HOUSE_GREEN), text(title, 15, weight=ft.FontWeight.W_700, color=colors.HOUSE_GREEN), text(detail, 12, color=colors.INK_LIGHT, max_lines=3)], spacing=6), expand=True)
+
+    def show_leaderboard(self):
+        rows = [
+            ("01", "概念新星", "—"),
+            ("02", "联结高手", "—"),
+            ("03", "学习探索者", "—"),
+        ]
+        ranking_rows = [surface(ft.Row([
+            badge(number, fill=colors.GOLD_SURFACE if number == "01" else colors.GREEN_LIGHT),
+            text(name, 15, color=colors.HOUSE_GREEN, weight=ft.FontWeight.W_700),
+            ft.Container(expand=True),
+            text(score, 14, color=colors.INK_LIGHT),
+        ], spacing=10), padding=14) for number, name, score in rows]
+        content = ft.Column([
+            section_title("排行榜", "和更多学习者一起保持概念联结"),
+            surface(ft.Column([ft.Icon(ft.Icons.INSIGHTS_OUTLINED, color=colors.GOLD, size=36), text("排行榜功能即将开放", 20, color=colors.HOUSE_GREEN, weight=ft.FontWeight.W_700), text("完成挑战后，你的最佳成绩会进入这里。", 14, color=colors.INK_LIGHT)], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=10), fill=colors.GOLD_SURFACE, padding=22),
+            *ranking_rows,
+        ], expand=True, spacing=14, scroll=ft.ScrollMode.AUTO)
+        self.page.clean(); self.page.add(self.shell(content, show_bottom_nav=True, selected_nav=1)); self.page.update()
+
+    def show_profile(self):
+        completed = sum(1 for score in self.scores if not score.failed)
+        best_combo = max((score.max_combo for score in self.scores), default=0)
+        content = ft.Column([
+            section_title("个人资料", "记录你的概念联结旅程"),
+            surface(ft.Row([ft.Container(ft.Text("概念", size=18, color=colors.HOUSE_GREEN, weight=ft.FontWeight.W_700), width=58, height=58, bgcolor=colors.GOLD_SURFACE, border_radius=30, alignment=ft.Alignment(0, 0)), ft.Column([text("概念探索者", 20, color=colors.HOUSE_GREEN, weight=ft.FontWeight.W_700), text("个人资料功能即将开放", 13, color=colors.INK_LIGHT)], spacing=4)], spacing=14), padding=18),
+            ft.Row([stat_card("完成关卡", f"{completed}"), stat_card("最高连击", f"×{best_combo}"), stat_card("挑战次数", f"{len(self.scores)}")], spacing=8),
+            surface(ft.Column([section_title("未来会记录什么"), text("昵称、头像、连续学习天数和跨设备成绩会在个人资料功能开放后同步。", 14, color=colors.INK_LIGHT)], spacing=8), padding=18),
+        ], expand=True, spacing=14, scroll=ft.ScrollMode.AUTO)
+        self.page.clean(); self.page.add(self.shell(content, show_bottom_nav=True, selected_nav=2)); self.page.update()
 
     def info_tile(self, title: str, value: str) -> ft.Control:
-        return ft.Container(ft.Column([ft.Text(title, size=14, color=colors.INK_LIGHT), ft.Text(value, size=17, weight=ft.FontWeight.W_600, color=colors.INK)], spacing=4), bgcolor=colors.WHITE, border_radius=12, padding=16, expand=True)
+        return stat_card(title, value)
 
     def show_instructions(self):
         self.page.clean()
         content = ft.Column([
-            ft.Text("怎么玩", size=34, weight=ft.FontWeight.W_600, color=colors.STARBUCKS_GREEN),
-            ft.Text("将两张卡片依次拖到下方配对区，系统会自动判断。", size=17, color=colors.INK),
-            ft.Container(ft.Column([ft.Text("配对规则", size=20, weight=ft.FontWeight.W_600, color=colors.STARBUCKS_GREEN), ft.Text("先拖入题目或公式，再拖入对应卡片。正确配对会增加连击；错误配对会短暂锁定操作。", size=16, color=colors.INK)], spacing=8), bgcolor=colors.WHITE, border_radius=12, padding=20),
+            section_title("怎么玩", "三步完成一次概念配对"),
+            surface(ft.Column([self.flow_step("01", "先看懂", "题目卡和公式卡都会直接显示，先找到它们之间的关系。"), self.flow_step("02", "再拖动", "将第一张卡放入左槽位，再把对应卡放入右槽位。"), self.flow_step("03", "保持连击", "正确配对会增加连击；错误配对会短暂锁定操作。")], spacing=16), padding=18),
+            surface(ft.Column([section_title("配对规则"), text("每一关都有倒计时。完成更多正确配对，并尽量减少尝试步数，就能获得更高的成绩。", 15), ft.Row([badge("正确 +1 连击", fill=colors.SUCCESS_SURFACE), badge("错误会锁定", fill=colors.ERROR_SURFACE, color=colors.ERROR), badge("时间归零 = 结束", fill=colors.GOLD_SURFACE)], spacing=8, wrap=True)], spacing=12), padding=18),
             self.pill("返回首页", lambda _: self.show_home(), primary=False),
         ], spacing=18, scroll=ft.ScrollMode.AUTO)
         self.page.add(self.shell(content)); self.page.update()
@@ -166,13 +307,28 @@ class App:
         self.feedback_explanation = None
         self.pair_zone_hover = False
         self.pair_hover_slot = None
+        self.pair_hover_card_id = None
         self.pair_slots = [None, None]
+        self.pair_locked_type = None
         self.show_game()
         self.page.run_task(self.timer_loop, self.engine)
 
     def start_level(self, level: int):
         if not self.loading:
+            self.show_loading(level)
             self.page.run_task(self.load_and_start, level)
+
+    def show_loading(self, level: int):
+        self.page.clean()
+        loading = surface(ft.Column([
+            ft.ProgressRing(color=colors.GREEN_ACCENT, width=34, height=34),
+            text(f"正在准备第 {level} 关", 20, color=colors.HOUSE_GREEN, weight=ft.FontWeight.W_700),
+            text("正在读取最新卡片内容…", 14, color=colors.INK_LIGHT),
+        ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=10), padding=20)
+        loading.width = 260
+        loading.height = 150
+        content = ft.Container(loading, expand=True, alignment=ft.Alignment(0, 0))
+        self.page.add(self.shell(content)); self.page.update()
 
     async def timer_loop(self, engine: GameEngine):
         while self.engine is engine and not engine.state.is_finished:
@@ -188,9 +344,12 @@ class App:
         # The pointer has left the drop target once a card is released.
         self.pair_zone_hover = False
         self.pair_hover_slot = None
+        self.pair_hover_card_id = None
         card_id = str(card_id)
         candidate = self.engine.card(card_id)
         if candidate is None:
+            return
+        if self.card_is_pair_locked(candidate):
             return
         selected_before = list(self.engine.state.selected_card_ids)
         # Keep immutable display snapshots before the engine marks a successful
@@ -220,40 +379,74 @@ class App:
             self.engine.state.is_locked = True
             self.refresh_game()
             self.page.run_task(self.resolve_feedback)
-        else:
-            self.pair_slots[0] = candidate
+        elif result == "selected":
+            self.pair_locked_type = candidate.type
+            next_slot = next((index for index, slot in enumerate(self.pair_slots) if slot is None), None)
+            if next_slot is not None:
+                self.pair_slots[next_slot] = candidate
             self.refresh_game()
 
     def pair_zone_accepts(self, event) -> bool:
-        """Validate a drag before Flet treats the drop zone as active."""
-        card_id = self.drag_card_id(event)
-        if not card_id or not self.engine or self.feedback_status:
+        """Validate a drag before Flet treats the whole workspace as active."""
+        if self._pair_zone_blocked() or all(slot is not None for slot in self.pair_slots):
             return False
-        card = self.engine.card(card_id)
-        return card is not None and not card.is_matched and card_id not in self.engine.state.selected_card_ids and not self.engine.state.is_locked
+        card_id = self.drag_card_id(event)
+        if card_id:
+            self.pair_hover_card_id = card_id
+            return self._card_can_enter_pair_zone(card_id)
+        # Keep the workspace visually active when Flet has accepted the drag
+        # group but has not resolved the source payload yet.
+        return bool(getattr(event, "accept", True))
 
-    def pair_zone_will_accept(self, event, slot_index: int) -> bool:
+    def pair_zone_will_accept(self, event) -> bool:
         accepted = self.pair_zone_accepts(event)
         self.pair_zone_hover = accepted
-        self.pair_hover_slot = slot_index if accepted else None
+        self.pair_hover_slot = None
         self.update_pair_zone_visuals()
         # Do not rebuild the page from inside Flet's hit-test callback. A
         # rebuild here invalidates the active drag target and causes the card
         # to snap back, especially on the third row of level two.
         return accepted
 
-    def pair_zone_leave(self, _event, slot_index: int):
-        if self.pair_hover_slot == slot_index:
-            self.pair_zone_hover = False
-            self.pair_hover_slot = None
-            self.update_pair_zone_visuals()
+    def pair_zone_accept(self, event):
+        card_id = self.drag_card_id(event) or self.pair_hover_card_id
+        self.pair_zone_hover = False
+        self.pair_hover_slot = None
+        self.pair_hover_card_id = None
+        self.update_pair_zone_visuals()
+        if card_id and self._card_can_enter_pair_zone(card_id):
+            self.on_card(card_id)
+
+    def pair_zone_leave(self, _event):
+        self.pair_zone_hover = False
+        self.pair_hover_slot = None
+        self.pair_hover_card_id = None
+        self.update_pair_zone_visuals()
+
+    def _pair_zone_blocked(self) -> bool:
+        return (
+            not self.engine
+            or bool(self.feedback_status)
+            or self.engine.state.is_locked
+            or self.engine.state.is_finished
+            or self.engine.state.is_failed
+        )
+
+    def _card_can_enter_pair_zone(self, card_id: str) -> bool:
+        if self._pair_zone_blocked() or not self.engine:
+            return False
+        card = self.engine.card(card_id)
+        return card is not None and not card.is_matched and card_id not in self.engine.state.selected_card_ids and not self.card_is_pair_locked(card)
+
+    def card_is_pair_locked(self, card) -> bool:
+        return bool(self.pair_locked_type and card.type == self.pair_locked_type and card.id not in self.engine.state.selected_card_ids)
 
     def update_pair_zone_visuals(self):
         if not self.pair_zone_visuals:
             return
         for index, visual in enumerate(self.pair_zone_visuals):
             occupied = self.pair_slots[index] is not None
-            is_hovered = self.pair_zone_hover and self.pair_hover_slot == index
+            is_hovered = self.pair_zone_hover
             if self.feedback_status == "success":
                 background, border = colors.GREEN_LIGHT, colors.GREEN_ACCENT
             elif self.feedback_status == "error":
@@ -270,17 +463,41 @@ class App:
                 # Initial construction happens before the control is attached;
                 # the assigned properties will be sent with the page update.
                 pass
+        if self.pair_workspace_visual is not None:
+            if self.feedback_status == "success":
+                self.pair_workspace_visual.bgcolor = colors.SUCCESS_SURFACE
+                self.pair_workspace_visual.border = ft.Border.all(2, colors.GREEN_ACCENT)
+            elif self.feedback_status == "error":
+                self.pair_workspace_visual.bgcolor = colors.ERROR_SURFACE
+                self.pair_workspace_visual.border = ft.Border.all(2, colors.ERROR)
+            elif self.pair_zone_hover:
+                self.pair_workspace_visual.bgcolor = colors.GREEN_LIGHT
+                self.pair_workspace_visual.border = ft.Border.all(2, colors.GREEN_ACCENT)
+            else:
+                self.pair_workspace_visual.bgcolor = colors.WHITE
+                self.pair_workspace_visual.border = ft.Border.all(1, colors.HAIRLINE)
+            try:
+                self.pair_workspace_visual.update()
+            except RuntimeError:
+                pass
 
     @staticmethod
     def drag_card_id(event) -> str | None:
         """Read drag data across Flet web/desktop event representations."""
-        data = getattr(event, "data", None)
-        if data is None:
-            source = getattr(event, "src", None)
+        for candidate in (
+            getattr(event, "data", None),
+            getattr(getattr(event, "src", None), "data", None),
+        ):
+            if candidate is not None and str(candidate):
+                return str(candidate)
+        source_id = getattr(event, "src_id", None)
+        page = getattr(event, "page", None)
+        if source_id is not None and page is not None:
+            source = page.get_control(source_id)
             data = getattr(source, "data", None)
-        if data is None:
-            return None
-        return str(data)
+            if data is not None and str(data):
+                return str(data)
+        return None
 
     async def resolve_feedback(self):
         await asyncio.sleep(0.7)
@@ -297,8 +514,10 @@ class App:
         self.feedback_status = None
         self.feedback_cards = []
         self.pair_slots = [None, None]
+        self.pair_locked_type = None
         self.pair_zone_hover = False
         self.pair_hover_slot = None
+        self.pair_hover_card_id = None
         if was_success and self.engine.state.is_finished:
             self.show_level_result()
         else:
@@ -321,26 +540,29 @@ class App:
         selected_ids = {card.id for card in self.pair_slots if card is not None}
         feedback_ids = {card.id for card in self.feedback_cards}
         available_cards = [card for card in state.cards if card.id not in selected_ids and card.id not in feedback_ids]
-        cards = [game_card(card, selected=False, width=78, height=132) for card in available_cards]
+        cards = [game_card(card, selected=False, disabled=self.card_is_pair_locked(card), width=82, height=124) for card in available_cards]
         self.pair_zone_visuals = []
+        self.pair_workspace_visual = None
         targets = []
         for slot_index in range(2):
             slot_card = self.pair_slots[slot_index]
-            slot_content = game_card(slot_card, selected=True, draggable=False, width=128, height=104) if slot_card else ft.Text("拖入卡片" if slot_index == 0 else "第二张卡", size=13, color=colors.INK_LIGHT)
+            slot_content = game_card(slot_card, selected=True, draggable=False, width=132, height=94) if slot_card else ft.Column([ft.Icon(ft.Icons.ADD_CIRCLE_OUTLINE, color=colors.INK_LIGHT, size=24), text("拖入第一张卡" if slot_index == 0 else "拖入对应卡", 12, color=colors.INK_LIGHT)], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=5)
             target_visual = ft.Container(
-                ft.Column([ft.Text("左区" if slot_index == 0 else "右区", size=16, weight=ft.FontWeight.W_600, color=colors.HOUSE_GREEN), slot_content], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=8),
+                ft.Column([text(f"{slot_index + 1:02d}", 11, color=colors.INK_LIGHT, weight=ft.FontWeight.W_700), text("第一张" if slot_index == 0 else "对应卡", 14, color=colors.HOUSE_GREEN, weight=ft.FontWeight.W_700), slot_content], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=6),
                 bgcolor=colors.WHITE,
                 border=ft.Border.all(1, colors.HAIRLINE),
-                border_radius=18,
-                padding=12,
-                height=150,
-                width=190,
+                border_radius=20,
+                padding=10,
+                height=142,
+                width=174,
                 alignment=ft.Alignment(0, 0),
             )
             self.pair_zone_visuals.append(target_visual)
-            targets.append(ft.DragTarget(group="cards", on_will_accept=lambda event, i=slot_index: self.pair_zone_will_accept(event, i), on_accept=lambda event: self.on_card(self.drag_card_id(event)), on_leave=lambda event, i=slot_index: self.pair_zone_leave(event, i), content=target_visual))
+            targets.append(target_visual)
         self.update_pair_zone_visuals()
-        target = ft.Row(targets, alignment=ft.MainAxisAlignment.CENTER, spacing=10)
+        workspace = surface(ft.Column([ft.Row([text("配对工作区", 16, color=colors.HOUSE_GREEN, weight=ft.FontWeight.W_700), text("拖到这里即可自动归位", 12, color=colors.INK_LIGHT)], alignment=ft.MainAxisAlignment.SPACE_BETWEEN), ft.Row(targets, alignment=ft.MainAxisAlignment.CENTER, spacing=10)], spacing=10), padding=12)
+        self.pair_workspace_visual = workspace
+        target = ft.DragTarget(group="cards", on_will_accept=self.pair_zone_will_accept, on_accept=self.pair_zone_accept, on_leave=self.pair_zone_leave, content=workspace)
         # Build rows explicitly instead of relying on GridView's aspect-ratio
         # calculation. This keeps the visual cards and their hit regions from
         # extending into the pairing target below.
@@ -348,35 +570,36 @@ class App:
             ft.Row(cards[index:index + 4], alignment=ft.MainAxisAlignment.CENTER, spacing=8)
             for index in range(0, len(cards), 4)
         ]
-        grid = ft.Column(card_rows, horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=10)
-        hud = ft.Row([ft.Text(f"LEVEL {state.level}", color=colors.WHITE, weight=ft.FontWeight.W_600, size=13), ft.Text(f"步数 {state.steps}", color=colors.WHITE, size=13), ft.Text(f"连击 ×{state.combo}", color=colors.WHITE, size=13), ft.Text(f"{state.remaining_seconds}s", color=colors.WHITE, weight=ft.FontWeight.W_600, size=13)], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
-        countdown = ft.ProgressBar(value=progress, bar_height=8, color=colors.GREEN_LIGHT, bgcolor=colors.GREEN_UPLIFT, border_radius=8, semantics_label="关卡倒计时进度", semantics_value=f"{state.remaining_seconds}秒剩余")
+        grid = surface(ft.Column(card_rows, horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=10), padding=12)
+        hud = ft.Row([ft.Column([text(f"LEVEL {state.level}", 12, color="#b7d7ca", weight=ft.FontWeight.W_700), text(f"第 {state.level} 关", 20, color=colors.WHITE, weight=ft.FontWeight.W_700)], spacing=3), ft.Row([badge(f"步数 {state.steps}", fill="#2b5148", color="#d9e8e2"), badge(f"连击 ×{state.combo}", fill=colors.GOLD, color=colors.HOUSE_GREEN)], spacing=6)], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
+        countdown = ft.ProgressBar(value=progress, bar_height=9, color=colors.GOLD, bgcolor=colors.GREEN_UPLIFT, border_radius=8, semantics_label="关卡倒计时进度", semantics_value=f"{state.remaining_seconds}秒剩余")
         if self.feedback_status == "success":
-            hint_text, hint_color = "配对成功", colors.GREEN_LIGHT
+            hint_text, hint_color = "配对成功 · 继续保持节奏", colors.GREEN_LIGHT
         elif self.feedback_status == "error":
-            hint_text, hint_color = "配对不正确，请稍候再试", "#F4B5AE"
+            hint_text, hint_color = "配对不正确 · 请稍候再试", "#ffd0ca"
         else:
             hint_text, hint_color = "拖动两张卡片到下方配对区", "#D9E8E2"
-        hint = ft.Text(hint_text, color=hint_color, size=14)
+        hint = ft.Text(hint_text, color=hint_color, size=14, weight=ft.FontWeight.W_600)
         explanation_view = ft.Container(
             ft.Text(f"解释：{self.feedback_explanation}", size=14, color=colors.INK, text_align=ft.TextAlign.CENTER),
-            bgcolor=colors.WHITE,
-            border_radius=12,
+            bgcolor=colors.SUCCESS_SURFACE,
+            border_radius=14,
             padding=12,
             # Keep the last successful explanation visible while the next
             # pair is being considered; it is replaced/cleared on completion
             # of that next attempt.
             visible=bool(self.feedback_explanation),
         )
-        content = ft.Column([ft.Container(ft.Column([hud, countdown, hint], spacing=10), bgcolor=colors.HOUSE_GREEN, border_radius=18, padding=16), grid, target, explanation_view], expand=True, spacing=16, scroll=ft.ScrollMode.AUTO)
+        feedback = ft.Container(hint, bgcolor=colors.ERROR_SURFACE if self.feedback_status == "error" else colors.SUCCESS_SURFACE if self.feedback_status == "success" else colors.HOUSE_GREEN, border_radius=12, padding=10)
+        content = ft.Column([ft.Container(ft.Column([hud, countdown, feedback], spacing=12), bgcolor=colors.HOUSE_GREEN, border_radius=22, padding=16), grid, target, explanation_view], expand=True, spacing=14, scroll=ft.ScrollMode.AUTO)
         self.page.clean(); self.page.add(self.shell(content, dark=True)); self.page.update()
 
     def show_level_result(self):
         if not self.engine: return
         state = self.engine.state
+        completed = not state.is_failed
         content = ft.Column([
-            ft.Text("本关结算", size=34, weight=ft.FontWeight.W_600, color=colors.STARBUCKS_GREEN),
-            ft.Text("挑战完成" if not state.is_failed else "时间到", size=20, color=colors.ERROR if state.is_failed else colors.INK),
+            ft.Container(ft.Column([badge("LEVEL COMPLETE" if completed else "TIME OUT", fill=colors.SUCCESS_SURFACE if completed else colors.ERROR_SURFACE, color=colors.HOUSE_GREEN if completed else colors.ERROR), text("挑战完成" if completed else "时间到", 32, color=colors.HOUSE_GREEN if completed else colors.ERROR, weight=ft.FontWeight.W_700), text("你的概念联结正在变得更清晰。" if completed else "再试一次，给自己留出更多思考时间。", 14, color=colors.INK_MUTED)], spacing=10), bgcolor=colors.SUCCESS_SURFACE if completed else colors.ERROR_SURFACE, border_radius=22, padding=22),
             ft.Row([self.info_tile("步数", str(state.steps)), self.info_tile("剩余时间", f"{state.remaining_seconds}s"), self.info_tile("最高连击", f"×{state.max_combo}")], spacing=10),
             self.pill("进入第二关" if state.level == 1 else "查看总成绩", lambda _: self.start_level(2) if state.level == 1 else self.show_summary()),
             self.pill("返回首页", lambda _: self.show_home(), primary=False),
@@ -384,8 +607,18 @@ class App:
         self.page.clean(); self.page.add(self.shell(content)); self.page.update()
 
     def show_summary(self):
-        rows = [ft.Container(ft.Row([ft.Text(f"第 {score.level} 关", weight=ft.FontWeight.W_600, color=colors.STARBUCKS_GREEN), ft.Text(f"{score.steps} 步 · {score.remaining_seconds}s · 连击 ×{score.max_combo}", color=colors.INK_MUTED)], alignment=ft.MainAxisAlignment.SPACE_BETWEEN), bgcolor=colors.WHITE, border_radius=12, padding=16) for score in self.scores]
-        content = ft.Column([ft.Text("汇总结算", size=34, weight=ft.FontWeight.W_600, color=colors.STARBUCKS_GREEN), ft.Text("你的概念联结记录", size=17, color=colors.INK), *rows, self.pill("重新挑战", lambda _: self.restart()), self.pill("返回首页", lambda _: self.show_home(), primary=False)], spacing=16, scroll=ft.ScrollMode.AUTO)
+        rows = []
+        for score in self.scores:
+            left = ft.Column([
+                text(f"第 {score.level} 关", 16, color=colors.HOUSE_GREEN, weight=ft.FontWeight.W_700),
+                text("完成" if not score.failed else "时间到", 12, color=colors.ERROR if score.failed else colors.GREEN_ACCENT),
+            ], spacing=4)
+            right = ft.Column([
+                text(f"{score.steps} 步", 14, weight=ft.FontWeight.W_700),
+                text(f"{score.remaining_seconds}s · 连击 ×{score.max_combo}", 12, color=colors.INK_LIGHT),
+            ], horizontal_alignment=ft.CrossAxisAlignment.END, spacing=4)
+            rows.append(surface(ft.Row([left, right], alignment=ft.MainAxisAlignment.SPACE_BETWEEN), padding=16))
+        content = ft.Column([section_title("汇总结算", "你的概念联结记录"), surface(ft.Column([text("两轮挑战", 14, color=colors.INK_LIGHT), text(f"{len(self.scores)} / 2", 28, color=colors.HOUSE_GREEN, weight=ft.FontWeight.W_700)], spacing=4), fill=colors.GOLD_SURFACE, padding=18), *rows, self.pill("重新挑战", lambda _: self.restart()), self.pill("返回首页", lambda _: self.show_home(), primary=False)], spacing=16, scroll=ft.ScrollMode.AUTO)
         self.page.clean(); self.page.add(self.shell(content)); self.page.update()
 
     def restart(self):
