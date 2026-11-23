@@ -1,6 +1,5 @@
 import random
 
-from components.game_card import compact_question
 from models.card import Card, LevelData
 from services.game_engine import GameEngine
 
@@ -54,11 +53,10 @@ def test_tick_fails_at_zero():
     assert game.state.is_finished
 
 
-def test_question_copy_is_compacted_without_changing_formula_copy():
-    assert compact_question("已知路程和用时，求平均速度") == "由路程和用时求平均速度"
-    shortened = compact_question("这是一个非常长的题目描述，需要在卡片中保持简短")
-    assert shortened.endswith("…")
-    assert len(shortened) <= 18
+def test_card_content_remains_the_csv_text():
+    original = "已知路程和用时，求平均速度；请根据题意写出完整表达式"
+    card = Card("q1", "speed", "question", original)
+    assert card.content == original
 
 
 def test_unknown_drag_id_is_ignored_without_exception():

@@ -21,6 +21,8 @@ The project defaults to the team's Google Sheets CSV endpoint. You can override 
 
 `level,order,pair_id,type,content,explanation,duration_seconds`
 
+The `content` field is displayed directly on the card. Edit `content` in Google Sheets to change the question or formula; the app does not rewrite, shorten, or replace it. `explanation` is shown after a successful pair.
+
 Each level must contain 8 cards (level 1) or 12 cards (level 2), and every pair id must occur exactly twice.
 
 ## Test
