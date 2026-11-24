@@ -1,21 +1,21 @@
 level,order,pair_id,type,content,explanation,duration_seconds
-1,1,speed,question,Distance and time given - find the average speed,Average speed is distance divided by time,120
+1,1,speed,question,Find the average speed,Average speed is distance divided by time,120
 1,2,speed,formula,v = s / t,Average speed formula,120
-1,3,force,question,Mass and acceleration given - find the force,Newton's second law multiplies mass by acceleration,120
+1,3,force,question,Find the force,Newton's second law multiplies mass by acceleration,120
 1,4,force,formula,F = ma,Newton's second law,120
-1,5,density,question,Mass and volume given - find the density,Density is mass divided by volume,120
+1,5,density,question,Find the density,Density is mass divided by volume,120
 1,6,density,formula,ρ = m / V,Density formula,120
-1,7,work,question,Force and displacement in the same direction - find the work,Work is force times displacement,120
+1,7,work,question,Find the work done,Work is force times displacement,120
 1,8,work,formula,W = Fs,Work formula,120
-2,1,power,question,How fast work is done per unit time,Power is work divided by time,180
+2,1,power,question,Rate of doing work,Power is work divided by time,180
 2,2,power,formula,P = W / t,Power formula,180
-2,3,pressure,question,Force acting on a unit area,Pressure is force divided by area,180
+2,3,pressure,question,Force per unit area,Pressure is force divided by area,180
 2,4,pressure,formula,p = F / S,Pressure formula,180
-2,5,energy,question,Energy a body has because of its motion,Kinetic energy depends on mass and the square of speed,180
+2,5,energy,question,Energy of motion,Kinetic energy depends on mass and the square of speed,180
 2,6,energy,formula,Ek = ½mv²,Kinetic energy formula,180
-2,7,voltage,question,Potential difference across a conductor carrying current,Voltage is current times resistance,180
+2,7,voltage,question,Potential difference,Voltage is current times resistance,180
 2,8,voltage,formula,U = IR,Ohm's law,180
-2,9,electric_power,question,How fast a circuit uses electrical energy,Electric power is voltage times current,180
+2,9,electric_power,question,Rate of energy use,Electric power is voltage times current,180
 2,10,electric_power,formula,P = UI,Electric power formula,180
-2,11,heat,question,Heat a body absorbs or releases,"Heat depends on mass, specific heat and temperature change",180
+2,11,heat,question,Heat absorbed,"Heat depends on mass, specific heat and temperature change",180
 2,12,heat,formula,Q = cmΔt,Heat formula,180
