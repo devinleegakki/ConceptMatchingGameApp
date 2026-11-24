@@ -18,7 +18,9 @@ def game_card(card: Card, on_tap=None, *, selected: bool = False, draggable: boo
     if disabled:
         fill = colors.DISABLED_SURFACE
         accent = colors.DISABLED_INK
-    label = "题目" if card.type == "question" else "公式"
+    # Single-letter tag: a full word overflows the 69px-wide card on a 360px
+    # screen, and the card face already shows what it is (formula vs question).
+    label = "Q" if card.type == "question" else "F"
     text_size = 13 if len(face) > 28 else 16
     body = ft.Column(
         [
