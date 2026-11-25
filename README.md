@@ -95,3 +95,7 @@ The release script builds only `arm64-v8a`, excludes Flet temporary files and te
 
 On Windows, the script automatically stages the project in `C:\concept_match_build` when the workspace path contains non-ASCII characters, then copies the final artifact back to the workspace.
 
+## Player scores, profile and leaderboard
+
+See [Google Sheets setup and scoring rules](google_sheets/SETUP.md) to connect the private scores workbook. The public question CSV remains independently configurable.
+

@@ -9,4 +9,5 @@ src/.flet/
 *.apk
 *.aab
 .env
+src/services/scores_endpoint.txt
 
