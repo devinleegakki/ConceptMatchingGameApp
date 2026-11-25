@@ -40,13 +40,17 @@ class ScorePages:
         else:
             controls = [section_title("Leaderboard", "Each player’s best completed two-level run.")]
             last_score = None
-            ranked = sorted(data, key=lambda row: (-row["points"], row["name"].casefold()))
+            ranked = sorted(
+                data,
+                key=lambda row: (-int(row["points"]), str(row["name"]).casefold()),
+            )
             for index, row in enumerate(ranked, 1):
-                if row["points"] != last_score:
+                points = int(row["points"])
+                if points != last_score:
                     rank = index
-                last_score = row["points"]
-                name = row["name"] + (" (you)" if row["me"] else "")
-                controls.append(surface(ft.Text(f'#{rank}   {name}     {row["points"]} / 200')))
+                last_score = points
+                name = str(row["name"]) + (" (you)" if row["me"] else "")
+                controls.append(surface(ft.Text(f'#{rank}   {name}     {points} / 200')))
             if not data:
                 controls.append(text("Complete both levels in one run to post the first score.", 15))
         controls.append(self.app.pill("Refresh", lambda _: self.open(kind), primary=False))

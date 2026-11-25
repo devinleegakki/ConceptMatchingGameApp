@@ -120,7 +120,11 @@ function dispatch(book, body) {
         .map(a => ({level:a.level, points:a.points, failed:a.failed, date:a.finished_at}))};
   }
   const names = new Map(users.map(u => [u.key_hash, u.display_name]));
-  return Array.from(bestRuns(all), ([player,points]) => ({name:names.get(player), points, me:player===id}));
+  return Array.from(bestRuns(all), ([player,points]) => ({
+    name:String(names.get(player) ?? "Unknown"),
+    points:Number(points),
+    me:player===id
+  }));
 }
 
 function doPost(e) {

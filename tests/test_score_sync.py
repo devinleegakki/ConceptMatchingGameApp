@@ -144,3 +144,18 @@ def test_leaderboard_sorts_sheet_rows_and_shares_tied_rank():
     asyncio.run(page.load(page.panel, "leaderboard"))
     rows = [row.content.value for row in page.panel.controls[1:-1]]
     assert rows == ["#1   Ada (you)     180 / 200", "#1   Zoe     180 / 200", "#3   Bo     150 / 200"]
+
+
+def test_leaderboard_accepts_numeric_names_and_points():
+    from components.score_pages import ScorePages
+    from flet import Column
+
+    class Cloud:
+        async def view(self, kind):
+            return [{"name": 123, "points": "180", "me": True}]
+
+    page = ScorePages(SimpleNamespace(cloud=Cloud(), pill=lambda *a, **kw: Column()))
+    page.panel = SimpleNamespace(controls=[], update=lambda: None)
+    asyncio.run(page.load(page.panel, "leaderboard"))
+    rows = [row.content.value for row in page.panel.controls[1:-1]]
+    assert rows == ["#1   123 (you)     180 / 200"]
