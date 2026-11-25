@@ -626,13 +626,24 @@ class App:
         target_card_width = max(60, target_width - 14)
         for slot_index in range(2):
             slot_card = self.pair_slots[slot_index]
-            slot_content = game_card(slot_card, selected=True, draggable=False, width=target_card_width, height=78) if slot_card else ft.Column([ft.Icon(ft.Icons.ADD_CIRCLE_OUTLINE, color=colors.INK_LIGHT, size=24), text("Drop the first card" if slot_index == 0 else "Drop the partner card", 12, color=colors.INK_LIGHT)], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=5)
+            slot_tag = text(f"{slot_index + 1:02d}", 11, color=colors.INK_LIGHT, weight=ft.FontWeight.W_700)
+            if slot_card:
+                # Filled slot: show only the placed card. Keeping the "First
+                # card" caption as well pushed the card past the 128px frame.
+                slot_body = ft.Column([slot_tag, game_card(slot_card, selected=True, draggable=False, width=target_card_width, height=64)], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=4)
+            else:
+                slot_body = ft.Column([
+                    slot_tag,
+                    text("First card" if slot_index == 0 else "Partner", 14, color=colors.HOUSE_GREEN, weight=ft.FontWeight.W_700),
+                    ft.Icon(ft.Icons.ADD_CIRCLE_OUTLINE, color=colors.INK_LIGHT, size=22),
+                    text("Drop the first card" if slot_index == 0 else "Drop the partner card", 11, color=colors.INK_LIGHT, text_align=ft.TextAlign.CENTER, max_lines=2),
+                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=4)
             target_visual = ft.Container(
-                ft.Column([text(f"{slot_index + 1:02d}", 11, color=colors.INK_LIGHT, weight=ft.FontWeight.W_700), text("First card" if slot_index == 0 else "Partner", 14, color=colors.HOUSE_GREEN, weight=ft.FontWeight.W_700), slot_content], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=6),
+                slot_body,
                 bgcolor=colors.WHITE,
                 border=ft.Border.all(1, colors.HAIRLINE),
                 border_radius=20,
-                padding=6,
+                padding=8,
                 height=128,
                 width=target_width,
                 alignment=ft.Alignment(0, 0),

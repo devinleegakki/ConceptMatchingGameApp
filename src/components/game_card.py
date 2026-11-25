@@ -5,6 +5,20 @@ from theme import colors
 from theme import typography
 
 
+def _fit_text_size(face: str, available: int) -> int:
+    """Pick the largest font size whose longest word still fits one line.
+
+    English card faces break mid-word when a single word is wider than the
+    card, which looks broken ("Potenti / al"). Shrinking until the longest
+    word fits keeps every line break on a word boundary.
+    """
+    longest = max((len(word) for word in face.split()), default=1)
+    for size in (16, 15, 14, 13, 12, 11, 10, 9):
+        if longest * size * 0.56 <= available:
+            return size
+    return 9
+
+
 def game_card(card: Card, on_tap=None, *, selected: bool = False, draggable: bool = True, disabled: bool = False, width: int = 150, height: int = 124) -> ft.Control:
     if card.is_matched:
         return ft.Container(width=width, height=height, opacity=0.0)
@@ -21,11 +35,12 @@ def game_card(card: Card, on_tap=None, *, selected: bool = False, draggable: boo
     # Single-letter tag: a full word overflows the 69px-wide card on a 360px
     # screen, and the card face already shows what it is (formula vs question).
     label = "Q" if card.type == "question" else "F"
-    text_size = 13 if len(face) > 28 else 16
+    padding = 10 if width >= 78 else 8
+    text_size = _fit_text_size(face, width - 2 * padding)
     body = ft.Column(
         [
             ft.Row([ft.Text(label, size=11, weight=ft.FontWeight.W_700, color=accent, font_family=typography.FONT_FAMILY), ft.Container(width=6, height=6, bgcolor=accent, border_radius=6)], alignment=ft.MainAxisAlignment.CENTER, spacing=5),
-            ft.Text(face, size=text_size, weight=ft.FontWeight.W_600, color=colors.DISABLED_INK if disabled else colors.INK, text_align=ft.TextAlign.CENTER, font_family=typography.FONT_FAMILY, max_lines=5, overflow=ft.TextOverflow.VISIBLE),
+            ft.Text(face, size=text_size, weight=ft.FontWeight.W_600, color=colors.DISABLED_INK if disabled else colors.INK, text_align=ft.TextAlign.CENTER, font_family=typography.FONT_FAMILY, max_lines=6, overflow=ft.TextOverflow.ELLIPSIS),
         ],
         alignment=ft.MainAxisAlignment.CENTER,
         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
@@ -35,7 +50,7 @@ def game_card(card: Card, on_tap=None, *, selected: bool = False, draggable: boo
         content=body,
         width=width,
         height=height,
-        padding=10,
+        padding=padding,
         bgcolor=fill,
         border=ft.Border.all(3 if selected else 1, accent if selected else colors.HAIRLINE),
         border_radius=12,

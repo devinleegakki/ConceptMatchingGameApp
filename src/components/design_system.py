@@ -6,8 +6,8 @@ from theme import colors, typography
 from theme.styles import card_style, danger_button, ghost_button, primary_button, secondary_button
 
 
-def text(value: str, size: int = typography.BODY, *, color: str = colors.INK, weight=None, max_lines=None) -> ft.Text:
-    return ft.Text(value, size=size, color=color, weight=weight, font_family=typography.FONT_FAMILY, max_lines=max_lines)
+def text(value: str, size: int = typography.BODY, *, color: str = colors.INK, weight=None, max_lines=None, text_align=None) -> ft.Text:
+    return ft.Text(value, size=size, color=color, weight=weight, font_family=typography.FONT_FAMILY, max_lines=max_lines, text_align=text_align)
 
 
 def button(label: str, on_click, *, kind: str = "primary", dark: bool = False) -> ft.Control:
