@@ -15,12 +15,14 @@ def test_loads_both_levels():
 
 
 def test_rejects_invalid_pair_count():
-    broken = CSV.replace("1,8,work,formula,W = Fs,功的计算公式,120", "1,8,other,formula,W = Fs,功的计算公式,120")
+    # Match on the stable prefix (level,order,pair_id) only, so rewording the
+    # card text never breaks this test.
+    broken = CSV.replace("1,8,work,", "1,8,other,")
     with pytest.raises(DataError, match="pair_id"):
         parse_csv(broken, 1)
 
 
 def test_rejects_missing_columns():
-    with pytest.raises(DataError, match="缺少字段"):
+    with pytest.raises(DataError, match="missing required columns"):
         parse_csv("level,order,pair_id\n1,1,a,\n", 1)
 

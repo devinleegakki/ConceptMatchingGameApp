@@ -6,8 +6,8 @@ from theme import colors, typography
 from theme.styles import card_style, danger_button, ghost_button, primary_button, secondary_button
 
 
-def text(value: str, size: int = typography.BODY, *, color: str = colors.INK, weight=None, max_lines=None) -> ft.Text:
-    return ft.Text(value, size=size, color=color, weight=weight, font_family=typography.FONT_FAMILY, max_lines=max_lines)
+def text(value: str, size: int = typography.BODY, *, color: str = colors.INK, weight=None, max_lines=None, text_align=None) -> ft.Text:
+    return ft.Text(value, size=size, color=color, weight=weight, font_family=typography.FONT_FAMILY, max_lines=max_lines, text_align=text_align)
 
 
 def button(label: str, on_click, *, kind: str = "primary", dark: bool = False) -> ft.Control:
@@ -52,8 +52,32 @@ def illustration_card(title: str, body: str, *, fill: str = colors.QUESTION_SURF
 
 def progress_ring(value: float, label: str, *, size: int = 152) -> ft.Container:
     ring = ft.ProgressRing(value=max(0.0, min(1.0, value)), color=colors.GOLD, bgcolor="#487266", stroke_width=10, width=size, height=size)
-    return ft.Container(ft.Stack([ring, ft.Column([text(label, 28, color=colors.WHITE, weight=ft.FontWeight.W_700), text("已完成", 12, color="#d9e8e2")], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER)], alignment=ft.Alignment(0, 0)), width=size, height=size)
+    return ft.Container(ft.Stack([ring, ft.Column([text(label, 28, color=colors.WHITE, weight=ft.FontWeight.W_700), text("Completed", 12, color="#d9e8e2")], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER)], alignment=ft.Alignment(0, 0)), width=size, height=size)
 
 
 def pager_title_block(title: str, description: str) -> ft.Column:
     return ft.Column([text(title, 30, color=colors.WHITE, weight=ft.FontWeight.W_700), text(description, 15, color="#d9e8e2", max_lines=2)], spacing=8)
+
+
+def combo_badge(combo: int) -> ft.Container:
+    """Live streak chip.
+
+    The fill steps from calm mint to gold to alert red as the chain grows, so
+    the HUD itself reports how hot the run is. ``animate_scale`` is declared
+    here so App.pulse_combo() only has to change ``scale`` twice to get a pop.
+    """
+    if combo <= 0:
+        fill, ink = colors.GREEN_LIGHT, colors.HOUSE_GREEN
+    elif combo < 3:
+        fill, ink = colors.GOLD, colors.HOUSE_GREEN
+    else:
+        # Hot streak: highest contrast the palette offers, still legible.
+        fill, ink = colors.ERROR, colors.WHITE
+    return ft.Container(
+        text(f"Chain ×{combo}", typography.MICRO, color=ink, weight=ft.FontWeight.W_700),
+        bgcolor=fill,
+        border_radius=20,
+        padding=ft.Padding.symmetric(horizontal=10, vertical=6),
+        animate_scale=ft.Animation(170, ft.AnimationCurve.EASE_OUT_BACK),
+        scale=ft.Scale(1.0),
+    )

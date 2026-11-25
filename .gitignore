@@ -11,3 +11,6 @@ src/.flet/
 .env
 src/services/scores_endpoint.txt
 
+# Local Windows preview helper (not part of the deliverable)
+启动预览.bat
+
