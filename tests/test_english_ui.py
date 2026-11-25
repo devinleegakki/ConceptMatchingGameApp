@@ -4,9 +4,15 @@ Renders every screen the app can show and walks the resulting control tree,
 asserting that no visible text contains CJK characters. This catches strings
 that a plain source grep would miss, such as values composed at runtime.
 """
+import asyncio
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
 import flet as ft
 
 from app import App
+from components.score_pages import ScorePages
+from services.scoring import calculate_points
 from models.card import Card, LevelData
 from services.game_engine import GameEngine
 
@@ -26,6 +32,9 @@ class FakePage:
     def update(self):
         pass
 
+    def run_task(self, task, *args):
+        asyncio.run(task(*args))
+
 
 def _level() -> LevelData:
     cards = []
@@ -42,6 +51,13 @@ def _app() -> App:
     app.level_data = _level()
     app.engine = GameEngine(app.level_data)
     app.scores = []
+    app.cloud = SimpleNamespace(view=AsyncMock(side_effect=lambda kind: {
+        "leaderboard": [{"name": "Guest-Robin", "points": 170, "me": True}],
+        "profile": {"name": "Guest-Robin", "kind": "guest", "attempts": 2,
+                    "passed": 2, "best": 170, "history": []},
+    }[kind]))
+    app.score_pages = ScorePages(app)
+    app.level_points = {1: calculate_points(4, 4, 5, 3, 60, 120, False)}
     app.pair_slots = [None, None]
     app.pair_zone_visuals = []
     app.pair_workspace_visual = None
@@ -102,7 +118,9 @@ def _collect(app: App) -> list[str]:
     return texts
 
 
-def test_main_screens_render_without_chinese():
+def test_main_screens_render_without_chinese(monkeypatch):
+    # The test page has no live Flet connection for the async Sheets panel refresh.
+    monkeypatch.setattr(ft.Column, "update", lambda self: None)
     app = _app()
     screens = {
         "home": app.show_home,
@@ -116,8 +134,13 @@ def test_main_screens_render_without_chinese():
     }
     for name, render in screens.items():
         render()
-        found = [text for text in _collect(app) if _has_cjk(text)]
+        texts = _collect(app)
+        found = [text for text in texts if _has_cjk(text)]
         assert not found, f"{name} screen still shows Chinese: {found}"
+        expected = {"profile": "Guest-Robin", "leaderboard": "#1   Guest-Robin (you)     170 / 200",
+                    "level result": "85 / 100", "summary": "85 / 200"}
+        if name in expected:
+            assert expected[name] in texts
 
 
 def test_error_message_from_csv_loader_is_english():

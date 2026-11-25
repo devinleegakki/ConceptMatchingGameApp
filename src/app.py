@@ -1,10 +1,15 @@
 import asyncio
 import os
+from uuid import uuid4
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 import flet as ft
 
 from components.game_card import game_card
+from components.score_pages import ScorePages
+from services.scoring import calculate_points
+from services.sheets_scores import SheetsScores, ScoreServiceError
 from components.design_system import badge, button, combo_badge, concept_node, hero_visual, illustration_card, pager_title_block, progress_ring, section_title, stat_card, surface, text
 from models.card import LevelData
 from services.csv_loader import DataError, load_level
@@ -65,12 +70,25 @@ class App:
         self.home_page_index = 0
         self.home_pager: ft.PageView | None = None
         self.home_page_dots: list[ft.Container] = []
-        self.leaderboard_entries: list[dict] = []
+        self.cloud = SheetsScores(ft.SharedPreferences())
+        self.score_pages = ScorePages(self)
+        self.level_points = {}
+        self.run_id = None
+        self.attempt_id = None
+        self.settled_attempt = None
         self._web_connected = True
         if self.is_web_preview:
             self.page.on_connect = self._on_web_connect
             self.page.on_disconnect = self._on_web_disconnect
         self.show_home()
+        self.page.run_task(self.sync_results)
+
+    async def sync_results(self):
+        try:
+            await self.cloud.sync()
+        except (ScoreServiceError, RuntimeError, ValueError):
+            # The queue stays on the device. Profile/Leaderboard retries and shows the error.
+            pass
 
     def _on_web_connect(self, _event):
         # A refresh/reconnect within the grace period keeps the dev server alive.
@@ -149,6 +167,10 @@ class App:
         )
 
     def on_navigation_change(self, event):
+        if self.score_pages.changing_account:
+            event.control.selected_index = 2
+            event.control.update()
+            return
         index = int(event.control.selected_index)
         if index == 0:
             self.show_home()
@@ -158,6 +180,7 @@ class App:
             self.show_profile()
 
     def show_home(self, error: str | None = None):
+        self.score_pages.leave()
         self.page.clean()
         error_view = ft.Container(
             ft.Row([ft.Icon(ft.Icons.ERROR_OUTLINE, color=colors.ERROR), text(error or "", 14, color=colors.ERROR, max_lines=4)], spacing=10),
@@ -268,34 +291,10 @@ class App:
         return ft.Container(ft.Column([badge(number, fill=colors.GOLD_SURFACE, color=colors.HOUSE_GREEN), text(title, 15, weight=ft.FontWeight.W_700, color=colors.HOUSE_GREEN), text(detail, 12, color=colors.INK_LIGHT, max_lines=3)], spacing=6), expand=True)
 
     def show_leaderboard(self):
-        rows = [
-            ("01", "Concept Rookie", "—"),
-            ("02", "Link Master", "—"),
-            ("03", "Learning Explorer", "—"),
-        ]
-        ranking_rows = [surface(ft.Row([
-            badge(number, fill=colors.GOLD_SURFACE if number == "01" else colors.GREEN_LIGHT),
-            text(name, 15, color=colors.HOUSE_GREEN, weight=ft.FontWeight.W_700),
-            ft.Container(expand=True),
-            text(score, 14, color=colors.INK_LIGHT),
-        ], spacing=10), padding=14) for number, name, score in rows]
-        content = ft.Column([
-            section_title("Leaderboard", "Keep linking concepts with other learners"),
-            surface(ft.Column([ft.Icon(ft.Icons.INSIGHTS_OUTLINED, color=colors.GOLD, size=36), text("Leaderboard coming soon", 20, color=colors.HOUSE_GREEN, weight=ft.FontWeight.W_700), text("Your best runs appear here once you finish a challenge.", 14, color=colors.INK_LIGHT)], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=10), fill=colors.GOLD_SURFACE, padding=22),
-            *ranking_rows,
-        ], expand=True, spacing=14, scroll=ft.ScrollMode.AUTO)
-        self.page.clean(); self.page.add(self.shell(content, show_bottom_nav=True, selected_nav=1)); self.page.update()
+        self.score_pages.open("leaderboard")
 
     def show_profile(self):
-        completed = sum(1 for score in self.scores if not score.failed)
-        best_combo = max((score.max_combo for score in self.scores), default=0)
-        content = ft.Column([
-            section_title("Profile", "Track your concept-linking journey"),
-            surface(ft.Row([ft.Container(ft.Text("CM", size=18, color=colors.HOUSE_GREEN, weight=ft.FontWeight.W_700), width=58, height=58, bgcolor=colors.GOLD_SURFACE, border_radius=30, alignment=ft.Alignment(0, 0)), ft.Column([text("Concept Explorer", 20, color=colors.HOUSE_GREEN, weight=ft.FontWeight.W_700), text("Profile coming soon", 13, color=colors.INK_LIGHT)], spacing=4)], spacing=14), padding=18),
-            ft.Row([stat_card("Levels cleared", f"{completed}"), stat_card("Best chain", f"×{best_combo}"), stat_card("Attempts", f"{len(self.scores)}")], spacing=8),
-            surface(ft.Column([section_title("What we will track"), text("Display name, avatar, daily streak and cross-device scores will sync once the profile is live.", 14, color=colors.INK_LIGHT)], spacing=8), padding=18),
-        ], expand=True, spacing=14, scroll=ft.ScrollMode.AUTO)
-        self.page.clean(); self.page.add(self.shell(content, show_bottom_nav=True, selected_nav=2)); self.page.update()
+        self.score_pages.open("profile")
 
     def info_tile(self, title: str, value: str) -> ft.Control:
         return stat_card(title, value)
@@ -317,6 +316,11 @@ class App:
         except DataError as exc:
             self.loading = False; self.show_home(str(exc)); return
         self.loading = False
+        if level == 1 or self.run_id is None:
+            self.run_id = "r_" + uuid4().hex
+            self.scores.clear()
+            self.level_points.clear()
+        self.attempt_id = "a_" + uuid4().hex
         self.engine = GameEngine(self.level_data)
         self.feedback_status = None
         self.feedback_cards = []
@@ -330,6 +334,7 @@ class App:
         self.page.run_task(self.timer_loop, self.engine)
 
     def start_level(self, level: int):
+        self.score_pages.leave()
         if not self.loading:
             self.show_loading(level)
             self.page.run_task(self.load_and_start, level)
@@ -556,8 +561,9 @@ class App:
         return None
 
     async def resolve_feedback(self):
+        engine = self.engine
         await asyncio.sleep(0.7)
-        if not self.engine:
+        if not engine or self.engine is not engine or engine.state.is_failed:
             return
         was_success = self.feedback_status == "success"
         if not was_success:
@@ -575,8 +581,7 @@ class App:
         self.pair_hover_slot = None
         self.pair_hover_card_id = None
         if was_success and self.engine.state.is_finished:
-            self.record_score(self.engine.state)
-            self.show_level_result()
+            await self.finish_level()
         else:
             self.refresh_game()
 
@@ -590,11 +595,27 @@ class App:
             self.scores[existing_index] = score
 
     async def finish_level(self):
-        await asyncio.sleep(0.35)
-        if not self.engine: return
+        if not self.engine or self.settled_attempt == self.attempt_id:
+            return
+        self.settled_attempt = self.attempt_id
         state = self.engine.state
+        attempt = dict(run_id=self.run_id, attempt_id=self.attempt_id, level=state.level,
+                       finished_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                       matched=state.matched_pairs, pairs=len(state.cards) // 2, steps=state.steps,
+                       max_combo=state.max_combo, remaining=state.remaining_seconds,
+                       duration=self.level_data.duration_seconds, failed=state.is_failed)
+        points = calculate_points(attempt["matched"], attempt["pairs"], attempt["steps"],
+                                  attempt["max_combo"], attempt["remaining"], attempt["duration"], attempt["failed"])
+        self.level_points[state.level] = points
         self.record_score(state)
+        try:
+            await self.cloud.enqueue(attempt)
+        except (ScoreServiceError, RuntimeError, ValueError):
+            self.settled_attempt = None
+            self.show_level_result(save_error=True)
+            return
         self.show_level_result()
+        self.page.run_task(self.sync_results)
 
     def refresh_game(self): self.show_game()
 
@@ -699,16 +720,24 @@ class App:
         content = ft.Column([ft.Container(ft.Column([hud, countdown_row, countdown, feedback], spacing=12), bgcolor=colors.HOUSE_GREEN, border_radius=22, padding=16), grid, target, explanation_view], expand=True, spacing=14, scroll=ft.ScrollMode.AUTO)
         self.page.clean(); self.page.add(self.shell(content, dark=True)); self.page.update()
 
-    def show_level_result(self):
+    def show_level_result(self, save_error=False):
         if not self.engine: return
         state = self.engine.state
         completed = not state.is_failed
         result_actions = []
-        if completed:
+        points = self.level_points[state.level]
+        if save_error:
+            result_actions.append(ft.Text("Could not save this attempt on the device. Retry before leaving."))
+            result_actions.append(self.pill("Retry save", lambda _: self.page.run_task(self.finish_level)))
+        elif not completed:
+            result_actions.append(self.pill("Retry level", lambda _: self.start_level(state.level)))
+        else:
             result_actions.append(self.pill("Go to level 2" if state.level == 1 else "View results", lambda _: self.start_level(2) if state.level == 1 else self.show_summary()))
         content = ft.Column([
             ft.Container(ft.Column([badge("LEVEL COMPLETE" if completed else "TIME OUT", fill=colors.SUCCESS_SURFACE if completed else colors.ERROR_SURFACE, color=colors.HOUSE_GREEN if completed else colors.ERROR), text("Level complete" if completed else "Time up", 32, color=colors.HOUSE_GREEN if completed else colors.ERROR, weight=ft.FontWeight.W_700), text("Your concept map is getting clearer." if completed else "Try again with more time to think.", 14, color=colors.INK_MUTED)], spacing=10), bgcolor=colors.SUCCESS_SURFACE if completed else colors.ERROR_SURFACE, border_radius=22, padding=22),
             ft.Row([self.info_tile("Steps", str(state.steps)), self.info_tile("Time left", f"{state.remaining_seconds}s"), self.info_tile("Best chain", f"×{state.max_combo}")], spacing=10),
+            section_title(f"{points.total} / 100",
+                          f"Matching {float(points.match):.1f}  +  Chain {float(points.combo):.1f}  +  Time {float(points.time):.1f}"),
             *result_actions,
             self.pill("Back to home", lambda _: self.show_home(), primary=False),
         ], spacing=18, horizontal_alignment=ft.CrossAxisAlignment.CENTER, scroll=ft.ScrollMode.AUTO)
@@ -726,7 +755,7 @@ class App:
                 text(f"{score.remaining_seconds}s · chain ×{score.max_combo}", 12, color=colors.INK_LIGHT),
             ], horizontal_alignment=ft.CrossAxisAlignment.END, spacing=4)
             rows.append(surface(ft.Row([left, right], alignment=ft.MainAxisAlignment.SPACE_BETWEEN), padding=16))
-        content = ft.Column([section_title("Run summary", "Your concept-link record"), surface(ft.Column([text("Rounds played", 14, color=colors.INK_LIGHT), text(f"{len(self.scores)} / 2", 28, color=colors.HOUSE_GREEN, weight=ft.FontWeight.W_700)], spacing=4), fill=colors.GOLD_SURFACE, padding=18), *rows, ft.Row([self.pill("Play again", lambda _: self.restart(), large=True)], alignment=ft.MainAxisAlignment.CENTER), ft.Row([self.pill("Back to home", lambda _: self.show_home(), primary=False, large=True)], alignment=ft.MainAxisAlignment.CENTER)], spacing=16, horizontal_alignment=ft.CrossAxisAlignment.CENTER, scroll=ft.ScrollMode.AUTO)
+        content = ft.Column([section_title("Run summary", "Your concept-link record"), surface(ft.Column([text("Total score", 14, color=colors.INK_LIGHT), text(f"{sum(p.total for p in self.level_points.values())} / 200", 28, color=colors.HOUSE_GREEN, weight=ft.FontWeight.W_700)], spacing=4), fill=colors.GOLD_SURFACE, padding=18), *rows, ft.Row([self.pill("Play again", lambda _: self.restart(), large=True)], alignment=ft.MainAxisAlignment.CENTER), ft.Row([self.pill("Back to home", lambda _: self.show_home(), primary=False, large=True)], alignment=ft.MainAxisAlignment.CENTER)], spacing=16, horizontal_alignment=ft.CrossAxisAlignment.CENTER, scroll=ft.ScrollMode.AUTO)
         self.page.clean(); self.page.add(self.shell(content)); self.page.update()
 
     def restart(self):
