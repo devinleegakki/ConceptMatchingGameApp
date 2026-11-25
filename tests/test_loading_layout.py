@@ -45,4 +45,4 @@ def test_loading_page_uses_centered_fixed_width_card():
     assert loading.width == 260
     assert loading.height == 150
     assert any(isinstance(control, ft.ProgressRing) and control.color == colors.GREEN_ACCENT for control in loading.content.controls)
-    assert any(getattr(control, "value", "") == "正在准备第 2 关" for control in loading.content.controls)
+    assert any(getattr(control, "value", "") == "Preparing level 2" for control in loading.content.controls)

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import flet as ft
 
 from components.game_card import game_card
-from components.design_system import badge, button, concept_node, hero_visual, illustration_card, pager_title_block, progress_ring, section_title, stat_card, surface, text
+from components.design_system import badge, button, combo_badge, concept_node, hero_visual, illustration_card, pager_title_block, progress_ring, section_title, stat_card, surface, text
 from models.card import LevelData
 from services.csv_loader import DataError, load_level
 from services.game_engine import GameEngine
@@ -29,7 +29,7 @@ class Score:
 class App:
     def __init__(self, page: ft.Page):
         self.page = page
-        self.page.title = "概念配对 · Concept Match"
+        self.page.title = "Concept Match"
         self.is_web_preview = bool(getattr(page, "web", False))
         self.page.bgcolor = "#d9d5ce" if self.is_web_preview else colors.NEUTRAL_WARM
         self.page.padding = 0
@@ -56,6 +56,7 @@ class App:
         self.pair_zone_visuals: list[ft.Container] = []
         self.pair_workspace_visual: ft.Container | None = None
         self.game_timer_text: ft.Text | None = None
+        self.combo_badge: ft.Container | None = None
         self.game_countdown: ft.ProgressBar | None = None
         self.pair_hover_card_id: str | None = None
         self.feedback_status: str | None = None
@@ -96,7 +97,7 @@ class App:
             ft.Row(
                 [
                     ft.Row([ft.Container(width=10, height=10, bgcolor=colors.GOLD, border_radius=10), ft.Text("CONCEPT MATCH", size=14, weight=ft.FontWeight.W_700, color=fg if dark else colors.HOUSE_GREEN, font_family=typography.FONT_FAMILY)], spacing=8),
-                    ft.Text("学习配对", size=12, color="#B7D7CA" if dark else colors.INK_LIGHT, font_family=typography.FONT_FAMILY),
+                    ft.Text("Pair to learn", size=12, color="#B7D7CA" if dark else colors.INK_LIGHT, font_family=typography.FONT_FAMILY),
                 ],
                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             ),
@@ -135,9 +136,9 @@ class App:
     def bottom_navigation(self, selected_index: int) -> ft.NavigationBar:
         return ft.NavigationBar(
             destinations=[
-                ft.NavigationBarDestination(icon=ft.Icon(ft.Icons.HOME_OUTLINED, color=colors.INK_LIGHT), selected_icon=ft.Icon(ft.Icons.HOME, color=colors.HOUSE_GREEN), label="首页"),
-                ft.NavigationBarDestination(icon=ft.Icon(ft.Icons.LEADERBOARD_OUTLINED, color=colors.INK_LIGHT), selected_icon=ft.Icon(ft.Icons.LEADERBOARD, color=colors.HOUSE_GREEN), label="排行榜"),
-                ft.NavigationBarDestination(icon=ft.Icon(ft.Icons.PERSON_OUTLINED, color=colors.INK_LIGHT), selected_icon=ft.Icon(ft.Icons.PERSON, color=colors.HOUSE_GREEN), label="个人资料"),
+                ft.NavigationBarDestination(icon=ft.Icon(ft.Icons.HOME_OUTLINED, color=colors.INK_LIGHT), selected_icon=ft.Icon(ft.Icons.HOME, color=colors.HOUSE_GREEN), label="Home"),
+                ft.NavigationBarDestination(icon=ft.Icon(ft.Icons.LEADERBOARD_OUTLINED, color=colors.INK_LIGHT), selected_icon=ft.Icon(ft.Icons.LEADERBOARD, color=colors.HOUSE_GREEN), label="Leaderboard"),
+                ft.NavigationBarDestination(icon=ft.Icon(ft.Icons.PERSON_OUTLINED, color=colors.INK_LIGHT), selected_icon=ft.Icon(ft.Icons.PERSON, color=colors.HOUSE_GREEN), label="Profile"),
             ],
             selected_index=selected_index,
             bgcolor=colors.WHITE,
@@ -180,9 +181,9 @@ class App:
         self.home_pager = pager
         pager_container = ft.Container(pager, bgcolor=colors.HOUSE_GREEN, border_radius=26, padding=24, height=610, expand=True, shadow=ft.BoxShadow(blur_radius=18, color="#30001f16", offset=ft.Offset(0, 8)))
         paging_controls = ft.Row([
-            ft.IconButton(ft.Icons.CHEVRON_LEFT, tooltip="上一页", icon_color="#b7d7ca", bgcolor="#2b5148", on_click=lambda _: self.previous_home_page()),
+            ft.IconButton(ft.Icons.CHEVRON_LEFT, tooltip="Previous page", icon_color="#b7d7ca", bgcolor="#2b5148", on_click=lambda _: self.previous_home_page()),
             ft.Row(dots, alignment=ft.MainAxisAlignment.CENTER, spacing=6, expand=True),
-            ft.IconButton(ft.Icons.CHEVRON_RIGHT, tooltip="下一页", icon_color="#b7d7ca", bgcolor="#2b5148", on_click=lambda _: self.next_home_page()),
+            ft.IconButton(ft.Icons.CHEVRON_RIGHT, tooltip="Next page", icon_color="#b7d7ca", bgcolor="#2b5148", on_click=lambda _: self.next_home_page()),
         ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
         content = ft.Column([error_view, pager_container, paging_controls], expand=True, spacing=10)
         self.page.add(self.shell(content, show_bottom_nav=True, selected_nav=0)); self.page.update()
@@ -233,31 +234,31 @@ class App:
             ft.Column([concept_node(ft.Icons.SPEED, size=46, fill=colors.FORMULA_SURFACE, color=colors.GREEN_ACCENT), ft.Container(width=2, height=24, bgcolor="#7da194"), concept_node(ft.Icons.LIGHTBULB_OUTLINE, size=46, fill=colors.QUESTION_SURFACE, color=colors.GOLD)], spacing=0, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
         ], alignment=ft.MainAxisAlignment.CENTER, spacing=10), height=190, fill="#2b5148", padding=10)
         return ft.Container(ft.Column([
-            ft.Row([badge("CONCEPT MATCH", fill="#2b5148", color="#d4e9e2"), text("学习配对", 12, color="#b7d7ca")], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+            ft.Row([badge("CONCEPT MATCH", fill="#2b5148", color="#d4e9e2"), text("Pair to learn", 12, color="#b7d7ca")], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
             visual,
-            pager_title_block("把概念连成一条线。", "拖动题目和公式，找到正确的对应关系。"),
-            ft.Row([self.pill("开始第 1 关", lambda _: self.start_level(1), dark=True, large=True)], alignment=ft.MainAxisAlignment.CENTER),
+            pager_title_block("Chain the concepts.", "Drag a question and its formula together."),
+            ft.Row([self.pill("Start level 1", lambda _: self.start_level(1), dark=True, large=True)], alignment=ft.MainAxisAlignment.CENTER),
         ], spacing=16, expand=True), expand=True)
 
     def home_how_to_page(self) -> ft.Control:
         visual = hero_visual(ft.Column([
-            ft.Row([illustration_card("题目", "由路程和用时求速度", fill=colors.QUESTION_SURFACE, accent=colors.GOLD, width=104, height=74), ft.Icon(ft.Icons.ARROW_FORWARD, size=27, color=colors.GOLD), illustration_card("公式", "v = s / t", fill=colors.FORMULA_SURFACE, accent=colors.GREEN_ACCENT, width=104, height=74)], alignment=ft.MainAxisAlignment.CENTER, spacing=6),
+            ft.Row([illustration_card("Question", "Find the speed", fill=colors.QUESTION_SURFACE, accent=colors.GOLD, width=104, height=74), ft.Icon(ft.Icons.ARROW_FORWARD, size=27, color=colors.GOLD), illustration_card("Formula", "v = s / t", fill=colors.FORMULA_SURFACE, accent=colors.GREEN_ACCENT, width=104, height=74)], alignment=ft.MainAxisAlignment.CENTER, spacing=6),
             ft.Row([ft.Container(ft.Icon(ft.Icons.DRAG_INDICATOR, color=colors.GOLD, size=19), width=35, height=35, bgcolor="#3b665a", border_radius=18, alignment=ft.Alignment(0, 0)), ft.Container(width=67, height=2, bgcolor=colors.GOLD), ft.Container(ft.Icon(ft.Icons.AUTO_AWESOME, color=colors.FOCUS, size=19), width=35, height=35, bgcolor="#3b665a", border_radius=18, alignment=ft.Alignment(0, 0))], alignment=ft.MainAxisAlignment.CENTER, spacing=5),
         ], spacing=8, horizontal_alignment=ft.CrossAxisAlignment.CENTER), height=180, fill="#2b5148", padding=10)
         return ft.Container(ft.Column([
             badge("HOW IT WORKS", fill="#2b5148", color="#d4e8e2"), visual,
-            pager_title_block("看见、拖动、连击。", "所有卡片从一开始就可见，把对应卡片放入工作区。"),
-            ft.Row([self.flow_step("01", "看见", "卡片全部可见"), self.flow_step("02", "拖动", "放入工作区"), self.flow_step("03", "连击", "正确配对加分")], spacing=6),
+            pager_title_block("See, drag, chain.", "All cards are visible. Drag one to its partner."),
+            ft.Row([self.flow_step("01", "See", "All cards visible"), self.flow_step("02", "Drag", "Drop in workspace"), self.flow_step("03", "Chain", "Correct pairs add up")], spacing=6),
         ], spacing=14, expand=True), expand=True)
 
     def home_progress_page(self) -> ft.Control:
         completed = sum(1 for score in self.scores if not score.failed)
         best_combo = max((score.max_combo for score in self.scores), default=0)
-        visual = hero_visual(ft.Row([progress_ring(min(1.0, completed / 2), f"{completed} / 2", size=131), ft.Column([badge("持续积累", fill=colors.GOLD_SURFACE, color=colors.HOUSE_GREEN), text("每次挑战都算数", 14, color="#d9e8e2"), ft.Icon(ft.Icons.TRENDING_UP, size=34, color=colors.GOLD)], spacing=8, horizontal_alignment=ft.CrossAxisAlignment.CENTER)], alignment=ft.MainAxisAlignment.CENTER, spacing=14), height=180, fill="#2b5148", padding=10)
+        visual = hero_visual(ft.Row([progress_ring(min(1.0, completed / 2), f"{completed} / 2", size=131), ft.Column([badge("Keep building", fill=colors.GOLD_SURFACE, color=colors.HOUSE_GREEN), text("Every run counts", 14, color="#d9e8e2"), ft.Icon(ft.Icons.TRENDING_UP, size=34, color=colors.GOLD)], spacing=8, horizontal_alignment=ft.CrossAxisAlignment.CENTER)], alignment=ft.MainAxisAlignment.CENTER, spacing=14), height=180, fill="#2b5148", padding=10)
         return ft.Container(ft.Column([
             badge("YOUR PROGRESS", fill="#2b5148", color="#d4e9e2"), visual,
-            pager_title_block("你的学习进度", "完成一次挑战后，这里会出现你的记录。"),
-            ft.Row([self.progress_metric("已完成", f"{completed} 关"), self.progress_metric("最高连击", f"×{best_combo}")], spacing=10),
+            pager_title_block("Your progress", "Finish a run and your record appears here."),
+            ft.Row([self.progress_metric("Completed", f"{completed} levels"), self.progress_metric("Best chain", f"×{best_combo}")], spacing=10),
         ], spacing=14, expand=True), expand=True)
 
     def progress_metric(self, label: str, value: str) -> ft.Container:
@@ -268,9 +269,9 @@ class App:
 
     def show_leaderboard(self):
         rows = [
-            ("01", "概念新星", "—"),
-            ("02", "联结高手", "—"),
-            ("03", "学习探索者", "—"),
+            ("01", "Concept Rookie", "—"),
+            ("02", "Link Master", "—"),
+            ("03", "Learning Explorer", "—"),
         ]
         ranking_rows = [surface(ft.Row([
             badge(number, fill=colors.GOLD_SURFACE if number == "01" else colors.GREEN_LIGHT),
@@ -279,8 +280,8 @@ class App:
             text(score, 14, color=colors.INK_LIGHT),
         ], spacing=10), padding=14) for number, name, score in rows]
         content = ft.Column([
-            section_title("排行榜", "和更多学习者一起保持概念联结"),
-            surface(ft.Column([ft.Icon(ft.Icons.INSIGHTS_OUTLINED, color=colors.GOLD, size=36), text("排行榜功能即将开放", 20, color=colors.HOUSE_GREEN, weight=ft.FontWeight.W_700), text("完成挑战后，你的最佳成绩会进入这里。", 14, color=colors.INK_LIGHT)], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=10), fill=colors.GOLD_SURFACE, padding=22),
+            section_title("Leaderboard", "Keep linking concepts with other learners"),
+            surface(ft.Column([ft.Icon(ft.Icons.INSIGHTS_OUTLINED, color=colors.GOLD, size=36), text("Leaderboard coming soon", 20, color=colors.HOUSE_GREEN, weight=ft.FontWeight.W_700), text("Your best runs appear here once you finish a challenge.", 14, color=colors.INK_LIGHT)], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=10), fill=colors.GOLD_SURFACE, padding=22),
             *ranking_rows,
         ], expand=True, spacing=14, scroll=ft.ScrollMode.AUTO)
         self.page.clean(); self.page.add(self.shell(content, show_bottom_nav=True, selected_nav=1)); self.page.update()
@@ -289,10 +290,10 @@ class App:
         completed = sum(1 for score in self.scores if not score.failed)
         best_combo = max((score.max_combo for score in self.scores), default=0)
         content = ft.Column([
-            section_title("个人资料", "记录你的概念联结旅程"),
-            surface(ft.Row([ft.Container(ft.Text("概念", size=18, color=colors.HOUSE_GREEN, weight=ft.FontWeight.W_700), width=58, height=58, bgcolor=colors.GOLD_SURFACE, border_radius=30, alignment=ft.Alignment(0, 0)), ft.Column([text("概念探索者", 20, color=colors.HOUSE_GREEN, weight=ft.FontWeight.W_700), text("个人资料功能即将开放", 13, color=colors.INK_LIGHT)], spacing=4)], spacing=14), padding=18),
-            ft.Row([stat_card("完成关卡", f"{completed}"), stat_card("最高连击", f"×{best_combo}"), stat_card("挑战次数", f"{len(self.scores)}")], spacing=8),
-            surface(ft.Column([section_title("未来会记录什么"), text("昵称、头像、连续学习天数和跨设备成绩会在个人资料功能开放后同步。", 14, color=colors.INK_LIGHT)], spacing=8), padding=18),
+            section_title("Profile", "Track your concept-linking journey"),
+            surface(ft.Row([ft.Container(ft.Text("CM", size=18, color=colors.HOUSE_GREEN, weight=ft.FontWeight.W_700), width=58, height=58, bgcolor=colors.GOLD_SURFACE, border_radius=30, alignment=ft.Alignment(0, 0)), ft.Column([text("Concept Explorer", 20, color=colors.HOUSE_GREEN, weight=ft.FontWeight.W_700), text("Profile coming soon", 13, color=colors.INK_LIGHT)], spacing=4)], spacing=14), padding=18),
+            ft.Row([stat_card("Levels cleared", f"{completed}"), stat_card("Best chain", f"×{best_combo}"), stat_card("Attempts", f"{len(self.scores)}")], spacing=8),
+            surface(ft.Column([section_title("What we will track"), text("Display name, avatar, daily streak and cross-device scores will sync once the profile is live.", 14, color=colors.INK_LIGHT)], spacing=8), padding=18),
         ], expand=True, spacing=14, scroll=ft.ScrollMode.AUTO)
         self.page.clean(); self.page.add(self.shell(content, show_bottom_nav=True, selected_nav=2)); self.page.update()
 
@@ -302,10 +303,10 @@ class App:
     def show_instructions(self):
         self.page.clean()
         content = ft.Column([
-            section_title("怎么玩", "三步完成一次概念配对"),
-            surface(ft.Column([self.flow_step("01", "先看懂", "题目卡和公式卡都会直接显示，先找到它们之间的关系。"), self.flow_step("02", "再拖动", "将第一张卡放入左槽位，再把对应卡放入右槽位。"), self.flow_step("03", "保持连击", "正确配对会增加连击；错误配对会短暂锁定操作。")], spacing=16), padding=18),
-            surface(ft.Column([section_title("配对规则"), text("每一关都有倒计时。完成更多正确配对，并尽量减少尝试步数，就能获得更高的成绩。", 15), ft.Row([badge("正确 +1 连击", fill=colors.SUCCESS_SURFACE), badge("错误会锁定", fill=colors.ERROR_SURFACE, color=colors.ERROR), badge("时间归零 = 结束", fill=colors.GOLD_SURFACE)], spacing=8, wrap=True)], spacing=12), padding=18),
-            self.pill("返回首页", lambda _: self.show_home(), primary=False),
+            section_title("How to play", "Three steps to one match"),
+            surface(ft.Column([self.flow_step("01", "Read first", "Question and formula cards are both visible. Find how they relate."), self.flow_step("02", "Then drag", "Drop the first card into the left slot, then its partner into the right slot."), self.flow_step("03", "Hold the chain", "Correct pairs grow your chain. A wrong pair locks input briefly.")], spacing=16), padding=18),
+            surface(ft.Column([section_title("Pairing rules"), text("Every level is timed. More correct pairs and fewer attempts give a higher score.", 15), ft.Row([badge("Correct +1 chain", fill=colors.SUCCESS_SURFACE), badge("Wrong locks input", fill=colors.ERROR_SURFACE, color=colors.ERROR), badge("Timer zero = over", fill=colors.GOLD_SURFACE)], spacing=8, wrap=True)], spacing=12), padding=18),
+            self.pill("Back to home", lambda _: self.show_home(), primary=False),
         ], spacing=18, scroll=ft.ScrollMode.AUTO)
         self.page.add(self.shell(content)); self.page.update()
 
@@ -337,8 +338,8 @@ class App:
         self.page.clean()
         loading = surface(ft.Column([
             ft.ProgressRing(color=colors.GREEN_ACCENT, width=34, height=34),
-            text(f"正在准备第 {level} 关", 20, color=colors.HOUSE_GREEN, weight=ft.FontWeight.W_700),
-            text("正在读取最新卡片内容…", 14, color=colors.INK_LIGHT),
+            text(f"Preparing level {level}", 20, color=colors.HOUSE_GREEN, weight=ft.FontWeight.W_700),
+            text("Loading the latest cards…", 14, color=colors.INK_LIGHT),
         ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=10), padding=20)
         loading.width = 260
         loading.height = 150
@@ -364,11 +365,33 @@ class App:
             self.game_timer_text.value = f"{engine.state.remaining_seconds}s"
         if self.game_countdown is not None:
             self.game_countdown.value = progress
-            self.game_countdown.semantics_value = f"{engine.state.remaining_seconds}秒剩余"
+            self.game_countdown.semantics_value = f"{engine.state.remaining_seconds} seconds left"
         try:
             self.page.update()
         except RuntimeError:
             pass
+
+    async def pulse_combo(self, combo: int):
+        """Pop the streak chip right after the board has been rebuilt.
+
+        show_game() recreates the chip on every refresh, so the pop has to run
+        on the fresh control: push a larger scale, let the animation declared in
+        combo_badge() play, then settle back to 1.0. The pop grows with the
+        streak so a long chain feels different from the first match.
+        """
+        chip = self.combo_badge
+        if chip is None:
+            return
+        peak = 1.16 if combo <= 1 else 1.24 if combo == 2 else 1.32
+        try:
+            chip.scale = ft.Scale(peak)
+            chip.update()
+            await asyncio.sleep(0.12)
+            chip.scale = ft.Scale(1.0)
+            chip.update()
+        except RuntimeError:
+            # A later rebuild already replaced this control; skip the rest.
+            return
 
     def on_card(self, card_id: str):
         if not self.engine or self.feedback_status or card_id is None:
@@ -410,6 +433,7 @@ class App:
             # Successful pairs are also locked during the 700ms feedback.
             self.engine.state.is_locked = True
             self.refresh_game()
+            self.page.run_task(self.pulse_combo, self.engine.state.combo)
             self.page.run_task(self.resolve_feedback)
         elif result == "selected":
             self.pair_locked_type = candidate.type
@@ -602,21 +626,32 @@ class App:
         target_card_width = max(60, target_width - 14)
         for slot_index in range(2):
             slot_card = self.pair_slots[slot_index]
-            slot_content = game_card(slot_card, selected=True, draggable=False, width=target_card_width, height=78) if slot_card else ft.Column([ft.Icon(ft.Icons.ADD_CIRCLE_OUTLINE, color=colors.INK_LIGHT, size=24), text("拖入第一张卡" if slot_index == 0 else "拖入对应卡", 12, color=colors.INK_LIGHT)], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=5)
+            slot_tag = text(f"{slot_index + 1:02d}", 11, color=colors.INK_LIGHT, weight=ft.FontWeight.W_700)
+            if slot_card:
+                # Filled slot: show only the placed card. Keeping the "First
+                # card" caption as well pushed the card past the 128px frame.
+                slot_body = ft.Column([slot_tag, game_card(slot_card, selected=True, draggable=False, width=target_card_width, height=104)], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=4)
+            else:
+                slot_body = ft.Column([
+                    slot_tag,
+                    text("First card" if slot_index == 0 else "Partner", 14, color=colors.HOUSE_GREEN, weight=ft.FontWeight.W_700),
+                    ft.Icon(ft.Icons.ADD_CIRCLE_OUTLINE, color=colors.INK_LIGHT, size=22),
+                    text("Drop the first card" if slot_index == 0 else "Drop the partner card", 11, color=colors.INK_LIGHT, text_align=ft.TextAlign.CENTER, max_lines=2),
+                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=4)
             target_visual = ft.Container(
-                ft.Column([text(f"{slot_index + 1:02d}", 11, color=colors.INK_LIGHT, weight=ft.FontWeight.W_700), text("第一张" if slot_index == 0 else "对应卡", 14, color=colors.HOUSE_GREEN, weight=ft.FontWeight.W_700), slot_content], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=6),
+                slot_body,
                 bgcolor=colors.WHITE,
                 border=ft.Border.all(1, colors.HAIRLINE),
                 border_radius=20,
-                padding=6,
-                height=128,
+                padding=8,
+                height=150,
                 width=target_width,
                 alignment=ft.Alignment(0, 0),
             )
             self.pair_zone_visuals.append(target_visual)
             targets.append(target_visual)
         self.update_pair_zone_visuals()
-        workspace = surface(ft.Column([ft.Row([text("配对工作区", 16, color=colors.HOUSE_GREEN, weight=ft.FontWeight.W_700), text("拖到这里即可自动归位", 12, color=colors.INK_LIGHT)], alignment=ft.MainAxisAlignment.SPACE_BETWEEN), ft.Row(targets, alignment=ft.MainAxisAlignment.CENTER, spacing=10)], spacing=10), padding=12)
+        workspace = surface(ft.Column([ft.Row([text("Pairing workspace", 16, color=colors.HOUSE_GREEN, weight=ft.FontWeight.W_700), text("Drop to snap in", 12, color=colors.INK_LIGHT)], alignment=ft.MainAxisAlignment.SPACE_BETWEEN), ft.Row(targets, alignment=ft.MainAxisAlignment.CENTER, spacing=10)], spacing=10), padding=12)
         self.pair_workspace_visual = workspace
         target = ft.DragTarget(group="cards", on_will_accept=self.pair_zone_will_accept, on_accept=self.pair_zone_accept, on_leave=self.pair_zone_leave, content=workspace)
         # Build rows explicitly instead of relying on GridView's aspect-ratio
@@ -627,19 +662,24 @@ class App:
             for index in range(0, len(cards), 4)
         ]
         grid = surface(ft.Column(card_rows, horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=10), padding=12)
-        hud = ft.Row([ft.Column([text(f"LEVEL {state.level}", 12, color="#b7d7ca", weight=ft.FontWeight.W_700), text(f"第 {state.level} 关", 20, color=colors.WHITE, weight=ft.FontWeight.W_700)], spacing=3), ft.Row([badge(f"步数 {state.steps}", fill="#2b5148", color="#d9e8e2"), badge(f"连击 ×{state.combo}", fill=colors.GOLD, color=colors.HOUSE_GREEN)], spacing=6)], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
+        self.combo_badge = combo_badge(state.combo)
+        hud = ft.Row([ft.Column([text(f"LEVEL {state.level}", 12, color="#b7d7ca", weight=ft.FontWeight.W_700), text("Match up", 20, color=colors.WHITE, weight=ft.FontWeight.W_700)], spacing=3), ft.Row([badge(f"Steps {state.steps}", fill="#2b5148", color="#d9e8e2"), self.combo_badge], spacing=6)], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
         self.game_timer_text = text(f"{state.remaining_seconds}s", 13, color=colors.GOLD, weight=ft.FontWeight.W_700)
-        countdown = ft.ProgressBar(value=progress, bar_height=9, color=colors.GOLD, bgcolor=colors.GREEN_UPLIFT, border_radius=8, semantics_label="关卡倒计时进度", semantics_value=f"{state.remaining_seconds}秒剩余")
+        countdown = ft.ProgressBar(value=progress, bar_height=9, color=colors.GOLD, bgcolor=colors.GREEN_UPLIFT, border_radius=8, semantics_label="Level countdown progress", semantics_value=f"{state.remaining_seconds} seconds left")
         self.game_countdown = countdown
         if self.feedback_status == "success":
-            hint_text, hint_color = "配对成功 · 继续保持节奏", colors.GREEN_LIGHT
+            if state.combo >= 3:
+                # Streak is hot: promotion from the neutral success tone to gold.
+                hint_text, hint_color = f"Matched · chain ×{state.combo}! Hold it", colors.HOUSE_GREEN
+            else:
+                hint_text, hint_color = "Matched · keep the rhythm", colors.GREEN_LIGHT
         elif self.feedback_status == "error":
-            hint_text, hint_color = "配对不正确 · 请稍候再试", "#ffd0ca"
+            hint_text, hint_color = "Not a match · try again shortly", "#ffd0ca"
         else:
-            hint_text, hint_color = "拖动两张卡片到下方配对区", "#D9E8E2"
+            hint_text, hint_color = "Drag two cards into the zone below", "#D9E8E2"
         hint = ft.Text(hint_text, color=hint_color, size=14, weight=ft.FontWeight.W_600)
         explanation_view = ft.Container(
-            ft.Text(f"解释：{self.feedback_explanation}", size=14, color=colors.INK, text_align=ft.TextAlign.CENTER),
+            ft.Text(f"Why: {self.feedback_explanation}", size=14, color=colors.INK, text_align=ft.TextAlign.CENTER),
             bgcolor=colors.SUCCESS_SURFACE,
             border_radius=14,
             padding=12,
@@ -648,8 +688,14 @@ class App:
             # of that next attempt.
             visible=bool(self.feedback_explanation),
         )
-        feedback = ft.Container(hint, bgcolor=colors.ERROR_SURFACE if self.feedback_status == "error" else colors.SUCCESS_SURFACE if self.feedback_status == "success" else colors.HOUSE_GREEN, border_radius=12, padding=10)
-        countdown_row = ft.Row([text("剩余时间", 12, color="#d9e8e2"), self.game_timer_text], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
+        if self.feedback_status == "error":
+            feedback_fill = colors.ERROR_SURFACE
+        elif self.feedback_status == "success":
+            feedback_fill = colors.GOLD if state.combo >= 3 else colors.SUCCESS_SURFACE
+        else:
+            feedback_fill = colors.HOUSE_GREEN
+        feedback = ft.Container(hint, bgcolor=feedback_fill, border_radius=12, padding=10)
+        countdown_row = ft.Row([text("Time left", 12, color="#d9e8e2"), self.game_timer_text], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
         content = ft.Column([ft.Container(ft.Column([hud, countdown_row, countdown, feedback], spacing=12), bgcolor=colors.HOUSE_GREEN, border_radius=22, padding=16), grid, target, explanation_view], expand=True, spacing=14, scroll=ft.ScrollMode.AUTO)
         self.page.clean(); self.page.add(self.shell(content, dark=True)); self.page.update()
 
@@ -659,12 +705,12 @@ class App:
         completed = not state.is_failed
         result_actions = []
         if completed:
-            result_actions.append(self.pill("进入第二关" if state.level == 1 else "查看总成绩", lambda _: self.start_level(2) if state.level == 1 else self.show_summary()))
+            result_actions.append(self.pill("Go to level 2" if state.level == 1 else "View results", lambda _: self.start_level(2) if state.level == 1 else self.show_summary()))
         content = ft.Column([
-            ft.Container(ft.Column([badge("LEVEL COMPLETE" if completed else "TIME OUT", fill=colors.SUCCESS_SURFACE if completed else colors.ERROR_SURFACE, color=colors.HOUSE_GREEN if completed else colors.ERROR), text("挑战完成" if completed else "时间到", 32, color=colors.HOUSE_GREEN if completed else colors.ERROR, weight=ft.FontWeight.W_700), text("你的概念联结正在变得更清晰。" if completed else "再试一次，给自己留出更多思考时间。", 14, color=colors.INK_MUTED)], spacing=10), bgcolor=colors.SUCCESS_SURFACE if completed else colors.ERROR_SURFACE, border_radius=22, padding=22),
-            ft.Row([self.info_tile("步数", str(state.steps)), self.info_tile("剩余时间", f"{state.remaining_seconds}s"), self.info_tile("最高连击", f"×{state.max_combo}")], spacing=10),
+            ft.Container(ft.Column([badge("LEVEL COMPLETE" if completed else "TIME OUT", fill=colors.SUCCESS_SURFACE if completed else colors.ERROR_SURFACE, color=colors.HOUSE_GREEN if completed else colors.ERROR), text("Level complete" if completed else "Time up", 32, color=colors.HOUSE_GREEN if completed else colors.ERROR, weight=ft.FontWeight.W_700), text("Your concept map is getting clearer." if completed else "Try again with more time to think.", 14, color=colors.INK_MUTED)], spacing=10), bgcolor=colors.SUCCESS_SURFACE if completed else colors.ERROR_SURFACE, border_radius=22, padding=22),
+            ft.Row([self.info_tile("Steps", str(state.steps)), self.info_tile("Time left", f"{state.remaining_seconds}s"), self.info_tile("Best chain", f"×{state.max_combo}")], spacing=10),
             *result_actions,
-            self.pill("返回首页", lambda _: self.show_home(), primary=False),
+            self.pill("Back to home", lambda _: self.show_home(), primary=False),
         ], spacing=18, horizontal_alignment=ft.CrossAxisAlignment.CENTER, scroll=ft.ScrollMode.AUTO)
         self.page.clean(); self.page.add(self.shell(content)); self.page.update()
 
@@ -672,15 +718,15 @@ class App:
         rows = []
         for score in self.scores:
             left = ft.Column([
-                text(f"第 {score.level} 关", 16, color=colors.HOUSE_GREEN, weight=ft.FontWeight.W_700),
-                text("完成" if not score.failed else "时间到", 12, color=colors.ERROR if score.failed else colors.GREEN_ACCENT),
+                text(f"Level {score.level}", 16, color=colors.HOUSE_GREEN, weight=ft.FontWeight.W_700),
+                text("Cleared" if not score.failed else "Time up", 12, color=colors.ERROR if score.failed else colors.GREEN_ACCENT),
             ], spacing=4)
             right = ft.Column([
-                text(f"{score.steps} 步", 14, weight=ft.FontWeight.W_700),
-                text(f"{score.remaining_seconds}s · 连击 ×{score.max_combo}", 12, color=colors.INK_LIGHT),
+                text(f"{score.steps} steps", 14, weight=ft.FontWeight.W_700),
+                text(f"{score.remaining_seconds}s · chain ×{score.max_combo}", 12, color=colors.INK_LIGHT),
             ], horizontal_alignment=ft.CrossAxisAlignment.END, spacing=4)
             rows.append(surface(ft.Row([left, right], alignment=ft.MainAxisAlignment.SPACE_BETWEEN), padding=16))
-        content = ft.Column([section_title("汇总结算", "你的概念联结记录"), surface(ft.Column([text("两轮挑战", 14, color=colors.INK_LIGHT), text(f"{len(self.scores)} / 2", 28, color=colors.HOUSE_GREEN, weight=ft.FontWeight.W_700)], spacing=4), fill=colors.GOLD_SURFACE, padding=18), *rows, ft.Row([self.pill("重新挑战", lambda _: self.restart(), large=True)], alignment=ft.MainAxisAlignment.CENTER), ft.Row([self.pill("返回首页", lambda _: self.show_home(), primary=False, large=True)], alignment=ft.MainAxisAlignment.CENTER)], spacing=16, horizontal_alignment=ft.CrossAxisAlignment.CENTER, scroll=ft.ScrollMode.AUTO)
+        content = ft.Column([section_title("Run summary", "Your concept-link record"), surface(ft.Column([text("Rounds played", 14, color=colors.INK_LIGHT), text(f"{len(self.scores)} / 2", 28, color=colors.HOUSE_GREEN, weight=ft.FontWeight.W_700)], spacing=4), fill=colors.GOLD_SURFACE, padding=18), *rows, ft.Row([self.pill("Play again", lambda _: self.restart(), large=True)], alignment=ft.MainAxisAlignment.CENTER), ft.Row([self.pill("Back to home", lambda _: self.show_home(), primary=False, large=True)], alignment=ft.MainAxisAlignment.CENTER)], spacing=16, horizontal_alignment=ft.CrossAxisAlignment.CENTER, scroll=ft.ScrollMode.AUTO)
         self.page.clean(); self.page.add(self.shell(content)); self.page.update()
 
     def restart(self):
