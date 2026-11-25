@@ -10,14 +10,16 @@
 4. 在工程根目录打开 PowerShell。临时桌面联调可以设置环境变量；为了让其他组员和安装包也能找到接口，请同时在构建前写入配置文件：
 
    ```powershell
-   $env:SCORES_API_URL = Read-Host 'Paste your deployed /exec URL'
-   Set-Content -Encoding ascii -LiteralPath src/services/scores_endpoint.txt -Value $env:SCORES_API_URL
+   $scoresUrl = Read-Host 'Paste your deployed /exec URL'
+   Set-Content -Encoding ascii -LiteralPath src/services/scores_endpoint.txt -Value $scoresUrl
    ```
 
-   配置文件须随本地工程构建，已从 Git 排除。将部署 URL 单独交给负责打包的组员即可。
+   App 优先读取此文件，文件不存在或为空时才使用环境变量 `SCORES_API_URL`。配置文件须随本地工程构建，已从 Git 排除。将部署 URL 单独交给负责打包的组员即可。
 5. 用组员原项目的 Python 环境运行 `python main.py`。进入 Profile，看到随机英文游客名和 0 次挑战，即可确认 App 成功连接。打开 Leaderboard，尚无两关通关记录时应显示空榜。GET 打开接口网址不是联调方法，App 使用 JSON POST。
 
 更新后端代码时，在“管理部署”中编辑原 Web App，选择新版本，再部署，原 URL 可继续使用。官方文档：[Apps Script Web Apps](https://developers.google.com/apps-script/guides/web)。
+
+桌面端显示待同步成绩时，请保留游戏数据。改好配置文件或恢复网络后，在 Profile 点 **Retry**。App 会重新读取网址，用原成绩编号重传。若界面显示连接失败或超时，请检查提示中域名的网络和代理设置；若显示 **Access denied**，请核对 Web App 部署的访问权限。
 
 ## 现场验收
 

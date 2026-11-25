@@ -1,11 +1,12 @@
 import asyncio
 from types import SimpleNamespace
 
+import httpx
 import pytest
 
 from app import App
 from services.scoring import calculate_points
-from services.sheets_scores import ScoreServiceError, SheetsScores
+from services.sheets_scores import ScoreServiceError, SheetsScores, scores_endpoint
 
 
 class Preferences(dict):
@@ -15,6 +16,58 @@ class Preferences(dict):
     async def set(self, key, value):
         self[key] = value
         return True
+
+
+def test_scores_config_prefers_local_file_and_reloads_edits(tmp_path, monkeypatch):
+    cloud = SheetsScores(Preferences())
+    cloud.config = tmp_path / "scores_endpoint.txt"
+    base = "https://script.google.com/macros/s/"
+    env_url = base + "env/exec"
+    file_url = base + "file/exec"
+    monkeypatch.setenv("SCORES_API_URL", " " + env_url + " ")
+    assert scores_endpoint(cloud.config) == env_url
+    cloud.config.write_text(file_url + "\n", encoding="utf-8-sig")
+    assert scores_endpoint(cloud.config) == file_url
+    cloud.config.write_text(file_url.replace("/exec", "/dev"), encoding="utf-8")
+    with pytest.raises(ScoreServiceError, match="scores_endpoint.txt"):
+        asyncio.run(cloud._post("login"))
+
+
+@pytest.mark.parametrize("failure, message", [
+    ("timeout", "timed out"),
+    ("connection", "ConnectError"),
+    ("denied", "Access denied"),
+    ("login-page", "Access denied"),
+    ("missing", "HTTP 404"),
+    ("html", "instead of score data"),
+])
+def test_sync_failure_reports_cause_and_preserves_score(tmp_path, monkeypatch, failure, message):
+    cloud = SheetsScores(Preferences())
+    cloud.config = tmp_path / "scores_endpoint.txt"
+    cloud.config.write_text("https://script.google.com/macros/s/test/exec", encoding="utf-8")
+
+    def respond(request):
+        if failure == "timeout":
+            raise httpx.ReadTimeout("timeout", request=request)
+        if failure == "connection":
+            raise httpx.ConnectError("offline", request=request)
+        if failure == "login-page" and request.url.host != "accounts.google.com":
+            return httpx.Response(302, headers={"Location": "https://accounts.google.com/login"})
+        status = {"denied": 403, "missing": 404}.get(failure, 200)
+        return httpx.Response(status, text="<html></html>")
+
+    client = httpx.AsyncClient
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: client(transport=httpx.MockTransport(respond), **kw))
+
+    async def scenario():
+        await cloud.enqueue({"attempt_id": "saved"})
+        with pytest.raises(ScoreServiceError, match=message):
+            await cloud.view("profile")
+        restored = SheetsScores(cloud.preferences)
+        await restored._load()
+        assert restored.pending == [{"attempt_id": "saved"}]
+
+    asyncio.run(scenario())
 
 
 @pytest.mark.parametrize("inputs,expected", [
