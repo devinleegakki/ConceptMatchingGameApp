@@ -630,7 +630,7 @@ class App:
             if slot_card:
                 # Filled slot: show only the placed card. Keeping the "First
                 # card" caption as well pushed the card past the 128px frame.
-                slot_body = ft.Column([slot_tag, game_card(slot_card, selected=True, draggable=False, width=target_card_width, height=64)], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=4)
+                slot_body = ft.Column([slot_tag, game_card(slot_card, selected=True, draggable=False, width=target_card_width, height=104)], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=4)
             else:
                 slot_body = ft.Column([
                     slot_tag,
@@ -644,7 +644,7 @@ class App:
                 border=ft.Border.all(1, colors.HAIRLINE),
                 border_radius=20,
                 padding=8,
-                height=128,
+                height=150,
                 width=target_width,
                 alignment=ft.Alignment(0, 0),
             )
