@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 import flet as ft
+from flet_audio import Audio
 
 from components.game_card import game_card
 from components.score_pages import ScorePages
@@ -77,6 +78,7 @@ class App:
         self.attempt_id = None
         self.settled_attempt = None
         self._web_connected = True
+        self._audio_players = {}
         if self.is_web_preview:
             self.page.on_connect = self._on_web_connect
             self.page.on_disconnect = self._on_web_disconnect
@@ -366,7 +368,28 @@ class App:
             if engine.tick():
                 self.update_timer_controls(engine)
                 if engine.state.is_finished:
+                    self.page.run_task(self.play_sound, "Game over.mp3")
                     await self.finish_level()
+
+    async def play_sound(self, filename: str):
+        """Play a bundled game sound without blocking the interaction loop."""
+        page = getattr(self, "page", None)
+        services = getattr(page, "services", None)
+        if page is None or services is None:
+            return
+        try:
+            players = getattr(self, "_audio_players", None)
+            if players is None:
+                players = self._audio_players = {}
+            audio = players.get(filename)
+            if audio is None:
+                audio = Audio(src=f"audios/{filename}")
+                services.append(audio)
+                players[filename] = audio
+            await audio.play()
+        except (RuntimeError, OSError, ValueError):
+            # Audio is feedback only; unavailable playback must not interrupt a run.
+            return
 
     def update_timer_controls(self, engine: GameEngine):
         """Update only the live timer widgets; rebuilding the game tree causes flicker."""
@@ -438,6 +461,7 @@ class App:
         second_snapshot = candidate
         result = self.engine.select(card_id)
         if result == "mismatch":
+            self.page.run_task(self.play_sound, "pair_incorrect.mp3")
             self.feedback_status = "error"
             # A new completed attempt replaces the previous explanation.
             self.feedback_explanation = None
@@ -448,6 +472,7 @@ class App:
             self.refresh_game()
             self.page.run_task(self.resolve_feedback)
         elif result == "matched":
+            self.page.run_task(self.play_sound, "pair_correct.mp3")
             self.feedback_status = "success"
             self.feedback_cards = [card for card in (first_snapshot, second_snapshot) if card is not None]
             self.pair_slots = list(self.feedback_cards[:2]) + [None, None]
@@ -765,6 +790,7 @@ class App:
         self.page.clean(); self.page.add(self.shell(content)); self.page.update()
 
     def show_summary(self):
+        self.page.run_task(self.play_sound, "Game finish.mp3")
         rows = []
         for score in self.scores:
             left = ft.Column([
