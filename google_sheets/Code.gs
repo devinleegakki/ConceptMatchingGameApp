@@ -75,10 +75,18 @@ function bestRuns(attempts) {
 }
 
 function dispatch(book, body) {
+  const cache = CacheService.getScriptCache();
+  const player = keyHash(body.key);
+  const leaderboardVersion = cache.get("leaderboard_version") || "1";
+  const cacheKey = body.action === "profile" ? "profile_" + player : "leaderboard_" + leaderboardVersion + "_" + player;
+  if (body.action === "profile" || body.action === "leaderboard") {
+    const cached = cache.get(cacheKey);
+    if (cached) return JSON.parse(cached);
+  }
   const usersTab = book.getSheetByName("Users");
   const attemptsTab = book.getSheetByName("Attempts");
   const users = records(usersTab, USERS);
-  const id = keyHash(body.key);
+  const id = player;
   let user = users.find(u => u.key_hash === id);
   if (body.action === "login") {
     requireValue(user && user.kind === "member", "Unknown sign-in code.");
@@ -98,7 +106,11 @@ function dispatch(book, body) {
       users.push(user);
     }
   }
-  if (body.action === "register") return {name:user.display_name};
+  if (body.action === "register") {
+    cache.remove("profile_" + id);
+    cache.put("leaderboard_version", Utilities.getUuid(), 21600);
+    return {name:user.display_name};
+  }
   const all = records(attemptsTab, ATTEMPTS);
   if (body.action === "attempt") {
     const a = body.attempt;
@@ -110,21 +122,27 @@ function dispatch(book, body) {
     }
     const row = {...a, player:id, points, finished_at:new Date(a.finished_at).toISOString()};
     attemptsTab.appendRow(ATTEMPTS.map(k => row[k]));
+    cache.put("leaderboard_version", Utilities.getUuid(), 21600);
+    cache.remove("profile_" + id);
     return {points};
   }
   if (body.action === "profile") {
     const mine = all.filter(a => a.player === id);
-    return {name:user.display_name, kind:user.kind, attempts:mine.length,
+    const result = {name:user.display_name, kind:user.kind, attempts:mine.length,
       passed:mine.filter(a => !a.failed).length, best:bestRuns(mine).get(id) ?? null,
-      history:mine.sort((a,b) => new Date(b.finished_at)-new Date(a.finished_at)).slice(0,10)
+      history:mine.sort((a,b) => new Date(b.finished_at)-new Date(a.finished_at)).slice(0,5)
         .map(a => ({level:a.level, points:a.points, failed:a.failed, date:a.finished_at}))};
+    cache.put(cacheKey, JSON.stringify(result), 30);
+    return result;
   }
   const names = new Map(users.map(u => [u.key_hash, u.display_name]));
-  return Array.from(bestRuns(all), ([player,points]) => ({
+  const result = Array.from(bestRuns(all), ([player,points]) => ({
     name:String(names.get(player) ?? "Unknown"),
     points:Number(points),
     me:player===id
   }));
+  cache.put(cacheKey, JSON.stringify(result), 30);
+  return result;
 }
 
 function doPost(e) {

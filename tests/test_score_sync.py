@@ -159,3 +159,52 @@ def test_leaderboard_accepts_numeric_names_and_points():
     asyncio.run(page.load(page.panel, "leaderboard"))
     rows = [row.content.value for row in page.panel.controls[1:-1]]
     assert rows == ["#1   123 (you)     180 / 200"]
+
+
+def test_view_does_not_block_on_pending_uploads():
+    async def scenario():
+        cloud = SheetsScores(Preferences())
+        cloud._post = AsyncMock(return_value=[])
+        cloud._flush = AsyncMock(side_effect=AssertionError("view must not flush"))
+        data = await cloud.view("leaderboard")
+        assert data == []
+        cloud._post.assert_awaited_once()
+    from unittest.mock import AsyncMock
+    asyncio.run(scenario())
+
+
+def test_score_pages_reuses_fresh_cache(monkeypatch):
+    from components.score_pages import ScorePages
+    from flet import Column
+
+    class Page:
+        def __init__(self):
+            self.controls = []
+        def clean(self):
+            self.controls.clear()
+        def add(self, control):
+            self.controls.append(control)
+        def update(self):
+            pass
+        def run_task(self, task, *args):
+            pass
+
+    class Cloud:
+        pending = []
+        identity = {"name": "Guest-Finch"}
+        def __init__(self):
+            self.calls = 0
+        async def view(self, kind):
+            self.calls += 1
+            return [{"name": "Ada", "points": 180, "me": True}]
+
+    cloud = Cloud()
+    monkeypatch.setattr("flet.Column.update", lambda self: None)
+    app = SimpleNamespace(cloud=cloud, page=Page(), shell=lambda panel, **_: panel,
+                          pill=lambda *a, **kw: Column())
+    page = ScorePages(app)
+    page.open("leaderboard")
+    # The test page does not run tasks, so populate the first response directly.
+    asyncio.run(page.load(page.panel, "leaderboard"))
+    page.open("leaderboard")
+    assert cloud.calls == 1

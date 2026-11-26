@@ -4,10 +4,18 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const crypto = require('node:crypto');
 const path = require('node:path');
+const cache = new Map();
+let version = 0;
 
 const context = vm.createContext({
   Utilities: {DigestAlgorithm: {SHA_256:'sha256'},
-    computeDigest: (algo, str) => Array.from(crypto.createHash(algo).update(str).digest())}
+    computeDigest: (algo, str) => Array.from(crypto.createHash(algo).update(str).digest()),
+    getUuid: () => 'cache-version-' + (++version)},
+  CacheService: {getScriptCache: () => ({
+    get: key => cache.get(key) || null,
+    put: (key, value) => cache.set(key, value),
+    remove: key => cache.delete(key),
+  })}
 });
 vm.runInContext(fs.readFileSync(path.join(__dirname,'../google_sheets/Code.gs'),'utf8'), context);
 
@@ -20,6 +28,8 @@ function sheet() {
   };
 }
 function setup() {
+  cache.clear();
+  version = 0;
   const tabs = {Users:sheet(), Attempts:sheet()};
   const book = {getSheetByName: name => tabs[name]};
   return (action, data={}) => context.dispatch(book, {action,key:'1'.repeat(32),name:'Guest-Robin',...data});

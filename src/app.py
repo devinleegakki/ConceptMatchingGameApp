@@ -86,6 +86,8 @@ class App:
     async def sync_results(self):
         try:
             await self.cloud.sync()
+            if getattr(self, "score_pages", None) is not None:
+                self.score_pages.invalidate_cache()
         except (ScoreServiceError, RuntimeError, ValueError):
             # The queue stays on the device. Profile/Leaderboard retries and shows the error.
             pass
@@ -260,8 +262,14 @@ class App:
             ft.Row([badge("CONCEPT MATCH", fill="#2b5148", color="#d4e9e2"), text("Pair to learn", 12, color="#b7d7ca")], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
             visual,
             pager_title_block("Chain the concepts.", "Drag a question and its formula together."),
-            ft.Row([self.pill("Start level 1", lambda _: self.start_level(1), dark=True, large=True)], alignment=ft.MainAxisAlignment.CENTER),
+            ft.Row([self.home_start_button()], alignment=ft.MainAxisAlignment.CENTER),
         ], spacing=16, expand=True), expand=True)
+
+    def home_start_button(self) -> ft.FilledButton:
+        """Build the prominent home CTA with concise, high-contrast copy."""
+        start = self.pill("Start", lambda _: self.start_level(1), dark=True, large=True)
+        start.text_style = ft.TextStyle(size=32, weight=ft.FontWeight.W_700, font_family=typography.FONT_FAMILY)
+        return start
 
     def home_how_to_page(self) -> ft.Control:
         visual = hero_visual(ft.Column([
@@ -625,6 +633,8 @@ class App:
             self.settled_attempt = None
             self.show_level_result(save_error=True)
             return
+        if getattr(self, "score_pages", None) is not None:
+            self.score_pages.invalidate_cache()
         self.show_level_result()
         self.page.run_task(self.sync_results)
 
