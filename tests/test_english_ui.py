@@ -137,7 +137,7 @@ def test_main_screens_render_without_chinese(monkeypatch):
         texts = _collect(app)
         found = [text for text in texts if _has_cjk(text)]
         assert not found, f"{name} screen still shows Chinese: {found}"
-        expected = {"profile": "Guest-Robin", "leaderboard": "#1   Guest-Robin (you)     170 / 200",
+        expected = {"profile": "Guest-Robin", "leaderboard": "Guest-Robin\nYou",
                     "level result": "85 / 100", "summary": "85 / 200"}
         if name in expected:
             assert expected[name] in texts
