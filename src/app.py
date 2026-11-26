@@ -11,7 +11,7 @@ from components.game_card import game_card
 from components.score_pages import ScorePages
 from services.scoring import calculate_points
 from services.sheets_scores import SheetsScores, ScoreServiceError
-from components.design_system import badge, button, combo_badge, concept_node, hero_visual, illustration_card, pager_title_block, progress_ring, section_title, stat_card, surface, text
+from components.design_system import badge, button, combo_badge, concept_node, eyebrow, hero_visual, illustration_card, pager_title_block, progress_ring, section_title, stat_card, surface, text
 from models.card import LevelData
 from services.csv_loader import DataError, load_level
 from services.game_engine import GameEngine
@@ -770,8 +770,8 @@ class App:
         if not self.engine: return
         state = self.engine.state
         completed = not state.is_failed
-        result_actions = []
         points = self.level_points[state.level]
+        result_actions = []
         if save_error:
             result_actions.append(ft.Text("Could not save this attempt on the device. Retry before leaving."))
             result_actions.append(self.pill("Retry save", lambda _: self.page.run_task(self.finish_level)))
@@ -779,14 +779,89 @@ class App:
             result_actions.append(self.pill("Retry level", lambda _: self.start_level(state.level)))
         else:
             result_actions.append(self.pill("Go to level 2" if state.level == 1 else "View results", lambda _: self.start_level(2) if state.level == 1 else self.show_summary()))
+
+        # Keep the settlement page dense and aligned with the dark green game HUD.
+        # The ring is deliberately decorative: the authoritative score remains the
+        # numeric total in the score strip below it.
+        score_value = max(0, min(100, int(points.total)))
+        ring = ft.ProgressRing(
+            value=score_value / 100,
+            color=colors.GOLD,
+            bgcolor=colors.GREEN_UPLIFT,
+            stroke_width=8,
+            width=74,
+            height=74,
+        )
+        ring_label = ft.Column(
+            [text(str(score_value), 20, color=colors.WHITE, weight=ft.FontWeight.W_700),
+             text("pts", 10, color="#d9e8e2")],
+            spacing=0,
+            alignment=ft.MainAxisAlignment.CENTER,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+        )
+        hero = ft.Container(
+            ft.Row([
+                ft.Column([
+                    text("LEVEL COMPLETE" if completed else "TIME OUT", 11, color="#b9d8cc" if completed else "#ffd0ca", weight=ft.FontWeight.W_700),
+                    text("Concept map clearer." if completed else "Time to try again.", 27, color=colors.WHITE if completed else colors.ERROR, weight=ft.FontWeight.W_700),
+                    text("Great rhythm — every pair found." if completed else "Try again with more time to think.", 13, color="#d9e8e2" if completed else colors.ERROR_SURFACE),
+                ], spacing=6, expand=True),
+                ft.Stack([ring, ft.Container(ring_label, width=74, height=74, alignment=ft.Alignment(0, 0))], width=74, height=74),
+            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+            bgcolor=colors.HOUSE_GREEN if completed else colors.ERROR_SURFACE,
+            border_radius=22,
+            padding=18,
+        )
+        score_strip = ft.Container(
+            ft.Row([
+                ft.Row([
+                    text("TOTAL SCORE", 11, color=colors.GREEN_ACCENT, weight=ft.FontWeight.W_700),
+                    text(f"{points.total} / 100", 28, color=colors.HOUSE_GREEN, weight=ft.FontWeight.W_700),
+                ], spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                text(f"Matching {float(points.match):.1f}\nChain {float(points.combo):.1f} · Time {float(points.time):.1f}", 11, color="#41695b", text_align=ft.TextAlign.RIGHT),
+            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+            bgcolor=colors.SUCCESS_SURFACE,
+            border_radius=18,
+            padding=ft.Padding.symmetric(horizontal=16, vertical=13),
+        )
+
+        def result_stat(label: str, value: str) -> ft.Container:
+            return ft.Container(
+                ft.Column([eyebrow(label), text(value, 22, weight=ft.FontWeight.W_700)], spacing=6, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                bgcolor=colors.WHITE,
+                border=ft.Border.all(1, colors.HAIRLINE),
+                border_radius=16,
+                padding=13,
+                expand=True,
+                shadow=ft.BoxShadow(blur_radius=10, color=colors.SHADOW, offset=ft.Offset(0, 4)),
+            )
+
+        stats = ft.Row([result_stat("Steps", str(state.steps)), result_stat("Time left", f"{state.remaining_seconds}s")], spacing=10)
+        chain_peak = ft.Container(
+            ft.Row([
+                ft.Column([text("CHAIN PEAK", 11, color=colors.HOUSE_GREEN, weight=ft.FontWeight.W_700), text("Nice momentum through the level", 11, color="#41695b")], spacing=3, expand=True),
+                text(f"×{state.max_combo}", 32, color=colors.HOUSE_GREEN, weight=ft.FontWeight.W_700),
+            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+            bgcolor=colors.GOLD_SURFACE,
+            border_radius=16,
+            padding=ft.Padding.symmetric(horizontal=15, vertical=12),
+        )
+        next_hint = ft.Text(
+            "Next challenge    Level 2 · 12 cards →" if state.level == 1 else "Your run is ready to review →",
+            size=11,
+            color=colors.INK_LIGHT,
+            font_family=typography.FONT_FAMILY,
+            visible=completed,
+        )
         content = ft.Column([
-            ft.Container(ft.Column([badge("LEVEL COMPLETE" if completed else "TIME OUT", fill=colors.SUCCESS_SURFACE if completed else colors.ERROR_SURFACE, color=colors.HOUSE_GREEN if completed else colors.ERROR), text("Level complete" if completed else "Time up", 32, color=colors.HOUSE_GREEN if completed else colors.ERROR, weight=ft.FontWeight.W_700), text("Your concept map is getting clearer." if completed else "Try again with more time to think.", 14, color=colors.INK_MUTED)], spacing=10), bgcolor=colors.SUCCESS_SURFACE if completed else colors.ERROR_SURFACE, border_radius=22, padding=22),
-            ft.Row([self.info_tile("Steps", str(state.steps)), self.info_tile("Time left", f"{state.remaining_seconds}s"), self.info_tile("Best chain", f"×{state.max_combo}")], spacing=10),
-            section_title(f"{points.total} / 100",
-                          f"Matching {float(points.match):.1f}  +  Chain {float(points.combo):.1f}  +  Time {float(points.time):.1f}"),
+            hero,
+            score_strip,
+            stats,
+            chain_peak,
             *result_actions,
+            next_hint,
             self.pill("Back to home", lambda _: self.show_home(), primary=False),
-        ], spacing=18, horizontal_alignment=ft.CrossAxisAlignment.CENTER, scroll=ft.ScrollMode.AUTO)
+        ], spacing=12, horizontal_alignment=ft.CrossAxisAlignment.CENTER, scroll=ft.ScrollMode.AUTO)
         self.page.clean(); self.page.add(self.shell(content)); self.page.update()
 
     def show_summary(self):
