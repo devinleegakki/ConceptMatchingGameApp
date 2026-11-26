@@ -45,6 +45,7 @@ class SheetsScores:
         self.lock = asyncio.Lock()
         self.identity = None
         self.pending = []
+        self._client = None
 
     async def _load(self):
         if self.identity is not None:
@@ -65,8 +66,9 @@ class SheetsScores:
     async def _post(self, action, **payload):
         url = scores_endpoint(self.config)
         try:
-            async with httpx.AsyncClient(timeout=18) as client:
-                response = await client.post(url, json={"action": action, **payload}, follow_redirects=True)
+            if self._client is None:
+                self._client = httpx.AsyncClient(timeout=18)
+            response = await self._client.post(url, json={"action": action, **payload}, follow_redirects=True)
         except httpx.TimeoutException as exc:
             raise ScoreServiceError(f"Connection to {exc.request.url.host} timed out. Check the network and retry.") from exc
         except httpx.RequestError as exc:
@@ -106,7 +108,6 @@ class SheetsScores:
     async def view(self, action):
         async with self.lock:
             await self._load()
-            await self._flush()
             return await self._post(action, **self.identity)
 
     async def sign_in(self, key):

@@ -1,5 +1,6 @@
 """Profile and ranking share the same Sheets client as level settlement."""
 import re
+import time
 
 import flet as ft
 
@@ -8,16 +9,25 @@ from services.sheets_scores import ScoreServiceError
 
 
 class ScorePages:
+    cache_ttl = 30.0
+
     def __init__(self, app):
         self.app = app
         self.client = app.cloud
         self.panel = None
         self.changing_account = False
+        self._cache = {}
 
     def leave(self):
         self.panel = None
 
-    def open(self, kind):
+    def invalidate_cache(self, kind=None):
+        if kind is None:
+            self._cache.clear()
+        else:
+            self._cache.pop(kind, None)
+
+    def open(self, kind, *, force=False):
         title = "Player profile" if kind == "profile" else "Leaderboard"
         panel = ft.Column([section_title(title), ft.ProgressBar()], expand=True, scroll=ft.ScrollMode.AUTO)
         self.panel = panel
@@ -25,6 +35,12 @@ class ScorePages:
         page.clean()
         page.add(self.app.shell(panel, show_bottom_nav=True, selected_nav=2 if kind == "profile" else 1))
         page.update()
+        cached = None if force else self._cache.get(kind)
+        if cached is not None:
+            data, stored_at = cached
+            self.render(panel, kind, data)
+            if time.monotonic() - stored_at < self.cache_ttl:
+                return
         page.run_task(self.load, panel, kind)
 
     async def load(self, panel, kind):
@@ -33,6 +49,12 @@ class ScorePages:
         except (ScoreServiceError, RuntimeError, ValueError) as error:
             self.error(panel, kind, str(error))
             return
+        if self.panel is not panel:
+            return
+        self._cache[kind] = (data, time.monotonic())
+        self.render(panel, kind, data)
+
+    def render(self, panel, kind, data):
         if self.panel is not panel:
             return
         if kind == "profile":
@@ -53,7 +75,7 @@ class ScorePages:
                 controls.append(surface(ft.Text(f'#{rank}   {name}     {points} / 200')))
             if not data:
                 controls.append(text("Complete both levels in one run to post the first score.", 15))
-        controls.append(self.app.pill("Refresh", lambda _: self.open(kind), primary=False))
+        controls.append(self.app.pill("Refresh", lambda _: self.open(kind, force=True), primary=False))
         panel.controls = controls
         panel.update()
 
@@ -66,7 +88,7 @@ class ScorePages:
             controls.insert(1, ft.Text(self.client.identity["name"]))
         if count:
             controls.append(ft.Text(f"{count} result(s) on this device waiting to sync."))
-        controls.append(self.app.pill("Retry", lambda _: self.open(kind)))
+        controls.append(self.app.pill("Retry", lambda _: self.open(kind, force=True)))
         panel.controls = controls
         panel.update()
 
@@ -78,7 +100,7 @@ class ScorePages:
                                ft.Text(f"Best full run: {best} / 200" if best is not None else "Best full run: —")])),
             section_title("Recent attempts"),
         ]
-        for row in data["history"]:
+        for row in data["history"][:5]:
             status = "Time out" if row["failed"] else "Passed"
             controls.append(ft.Text(f'{str(row["date"])[:10]}   Level {row["level"]} · {status} · {row["points"]}/100'))
         if not data["history"]:
@@ -98,7 +120,8 @@ class ScorePages:
                 if self.panel is panel:
                     self.app.scores.clear()
                     self.app.level_points.clear()
-                    self.open("profile")
+                    self.invalidate_cache()
+                    self.open("profile", force=True)
             finally:
                 self.changing_account = False
                 if self.panel is panel:
