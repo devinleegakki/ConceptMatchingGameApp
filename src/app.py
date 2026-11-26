@@ -365,16 +365,27 @@ class App:
         if self.level_data is None:
             return
         duration = max(1, self.level_data.duration_seconds)
-        progress = max(0.0, min(1.0, 1 - engine.state.remaining_seconds / duration))
+        progress = max(0.0, min(1.0, engine.state.remaining_seconds / duration))
+        timer_color = self.timer_progress_color(progress)
         if self.game_timer_text is not None:
             self.game_timer_text.value = f"{engine.state.remaining_seconds}s"
         if self.game_countdown is not None:
             self.game_countdown.value = progress
+            self.game_countdown.color = timer_color
             self.game_countdown.semantics_value = f"{engine.state.remaining_seconds} seconds left"
         try:
             self.page.update()
         except RuntimeError:
             pass
+
+    @staticmethod
+    def timer_progress_color(remaining_ratio: float) -> str:
+        """Return the urgency color for the remaining countdown ratio."""
+        if remaining_ratio > 0.5:
+            return colors.GREEN_ACCENT
+        if remaining_ratio > 0.2:
+            return colors.GOLD
+        return colors.ERROR
 
     async def pulse_combo(self, combo: int):
         """Pop the streak chip right after the board has been rebuilt.
@@ -632,7 +643,7 @@ class App:
         if not self.engine: return
         state = self.engine.state
         duration = self.level_data.duration_seconds if self.level_data else max(1, state.remaining_seconds)
-        progress = max(0.0, min(1.0, 1 - state.remaining_seconds / duration))
+        progress = max(0.0, min(1.0, state.remaining_seconds / duration))
         selected_ids = {card.id for card in self.pair_slots if card is not None}
         feedback_ids = {card.id for card in self.feedback_cards}
         available_cards = [card for card in state.cards if card.id not in selected_ids and card.id not in feedback_ids]
@@ -686,7 +697,7 @@ class App:
         self.combo_badge = combo_badge(state.combo)
         hud = ft.Row([ft.Column([text(f"LEVEL {state.level}", 12, color="#b7d7ca", weight=ft.FontWeight.W_700), text("Match up", 20, color=colors.WHITE, weight=ft.FontWeight.W_700)], spacing=3), ft.Row([badge(f"Steps {state.steps}", fill="#2b5148", color="#d9e8e2"), self.combo_badge], spacing=6)], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
         self.game_timer_text = text(f"{state.remaining_seconds}s", 13, color=colors.GOLD, weight=ft.FontWeight.W_700)
-        countdown = ft.ProgressBar(value=progress, bar_height=9, color=colors.GOLD, bgcolor=colors.GREEN_UPLIFT, border_radius=8, semantics_label="Level countdown progress", semantics_value=f"{state.remaining_seconds} seconds left")
+        countdown = ft.ProgressBar(value=progress, bar_height=9, color=self.timer_progress_color(progress), bgcolor=colors.GREEN_UPLIFT, border_radius=8, semantics_label="Level countdown progress", semantics_value=f"{state.remaining_seconds} seconds left")
         self.game_countdown = countdown
         if self.feedback_status == "success":
             if state.combo >= 3:
