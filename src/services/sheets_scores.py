@@ -13,6 +13,13 @@ class ScoreServiceError(Exception):
     pass
 
 
+GOOGLE_WEB_APP = re.compile(r"https://script\.google\.com/(?:macros|a/macros/[^/\s]+)/s/[A-Za-z0-9_-]+/exec")
+
+# Loopback is accepted only so the client can be exercised without a deployment
+# (see _tools/mock_scores_server.py). A shipped build still needs a real /exec URL.
+LOCAL_LOOPBACK = re.compile(r"http://(?:127\.0\.0\.1|localhost):\d{2,5}(?:/\S*)?")
+
+
 def scores_endpoint(config):
     try:
         url = config.read_text(encoding="utf-8-sig").strip()
@@ -26,7 +33,7 @@ def scores_endpoint(config):
         url = os.environ.get(source, "").strip()
     if not url:
         raise ScoreServiceError("Google Sheets is not connected. Set the web app URL in scores_endpoint.txt and retry.")
-    if not re.fullmatch(r"https://script\.google\.com/(?:macros|a/macros/[^/\s]+)/s/[A-Za-z0-9_-]+/exec", url):
+    if not (GOOGLE_WEB_APP.fullmatch(url) or LOCAL_LOOPBACK.fullmatch(url)):
         raise ScoreServiceError(f"Check {source}. Paste the deployed Google web app URL ending in /exec.")
     return url
 

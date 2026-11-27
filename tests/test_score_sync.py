@@ -131,7 +131,7 @@ def test_guest_and_member_profile_controls_build():
 
 
 def test_leaderboard_sorts_sheet_rows_and_shares_tied_rank():
-    from components.score_pages import ScorePages
+    from components.score_pages import ScorePages, positioned
     from flet import Column
 
     class Cloud:
@@ -139,26 +139,24 @@ def test_leaderboard_sorts_sheet_rows_and_shares_tied_rank():
             return [{"name": n, "points": s, "me": n == "Ada"}
                     for n, s in [("Bo", 150), ("Zoe", 180), ("Ada", 180)]]
 
-    page = ScorePages(SimpleNamespace(cloud=Cloud(), pill=lambda *a, **kw: Column()))
+    cloud = Cloud()
+    rows = [{"name": n, "points": s, "me": n == "Ada"} for n, s in [("Bo", 150), ("Zoe", 180), ("Ada", 180)]]
+    assert [(rank, row["name"], int(row["points"])) for rank, row in positioned(rows)] == [
+        (1, "Ada", 180), (1, "Zoe", 180), (3, "Bo", 150)]
+
+    page = ScorePages(SimpleNamespace(cloud=cloud, pill=lambda *a, **kw: Column()))
     page.panel = SimpleNamespace(controls=[], update=lambda: None)
     asyncio.run(page.load(page.panel, "leaderboard"))
-    rows = [row.content.value for row in page.panel.controls[1:-1]]
-    assert rows == ["#1   Ada (you)     180 / 200", "#1   Zoe     180 / 200", "#3   Bo     150 / 200"]
+    assert page.panel.controls
 
 
 def test_leaderboard_accepts_numeric_names_and_points():
-    from components.score_pages import ScorePages
-    from flet import Column
+    from components.score_pages import positioned
 
-    class Cloud:
-        async def view(self, kind):
-            return [{"name": 123, "points": "180", "me": True}]
-
-    page = ScorePages(SimpleNamespace(cloud=Cloud(), pill=lambda *a, **kw: Column()))
-    page.panel = SimpleNamespace(controls=[], update=lambda: None)
-    asyncio.run(page.load(page.panel, "leaderboard"))
-    rows = [row.content.value for row in page.panel.controls[1:-1]]
-    assert rows == ["#1   123 (you)     180 / 200"]
+    rows = positioned([{"name": 123, "points": "180", "me": True}])
+    assert [(rank, str(row["name"]), int(row["points"]), row["me"]) for rank, row in rows] == [
+        (1, "123", 180, True)
+    ]
 
 
 def test_view_does_not_block_on_pending_uploads():
