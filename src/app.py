@@ -784,10 +784,11 @@ class App:
         # The ring is deliberately decorative: the authoritative score remains the
         # numeric total in the score strip below it.
         score_value = max(0, min(100, int(points.total)))
+        ring_track = colors.GREEN_UPLIFT if completed else "#7f302c"
         ring = ft.ProgressRing(
             value=score_value / 100,
             color=colors.GOLD,
-            bgcolor=colors.GREEN_UPLIFT,
+            bgcolor=ring_track,
             stroke_width=8,
             width=74,
             height=74,
@@ -802,13 +803,13 @@ class App:
         hero = ft.Container(
             ft.Row([
                 ft.Column([
-                    text("LEVEL COMPLETE" if completed else "TIME OUT", 11, color="#b9d8cc" if completed else "#ffd0ca", weight=ft.FontWeight.W_700),
-                    text("Concept map clearer." if completed else "Time to try again.", 27, color=colors.WHITE if completed else colors.ERROR, weight=ft.FontWeight.W_700),
-                    text("Great rhythm — every pair found." if completed else "Try again with more time to think.", 13, color="#d9e8e2" if completed else colors.ERROR_SURFACE),
+                    text("LEVEL COMPLETE" if completed else "TIME OUT", 11, color="#b9d8cc" if completed else colors.WHITE, weight=ft.FontWeight.W_700),
+                    text("Concept map clearer." if completed else "Time to try again.", 27, color=colors.WHITE, weight=ft.FontWeight.W_700),
+                    text("Great rhythm — every pair found." if completed else "Try again with more time to think.", 13, color="#d9e8e2" if completed else "#ffe5e0"),
                 ], spacing=6, expand=True),
                 ft.Stack([ring, ft.Container(ring_label, width=74, height=74, alignment=ft.Alignment(0, 0))], width=74, height=74),
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, vertical_alignment=ft.CrossAxisAlignment.CENTER),
-            bgcolor=colors.HOUSE_GREEN if completed else colors.ERROR_SURFACE,
+            bgcolor=colors.HOUSE_GREEN if completed else colors.ERROR,
             border_radius=22,
             padding=18,
         )
