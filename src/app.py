@@ -263,7 +263,7 @@ class App:
         return ft.Container(ft.Column([
             ft.Row([badge("CONCEPT MATCH", fill="#2b5148", color="#d4e9e2"), text("Pair to learn", 12, color="#b7d7ca")], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
             visual,
-            pager_title_block("Chain the concepts.", "Drag a question and its formula together."),
+            pager_title_block("Combo the concepts.", "Drag a question and its formula together."),
             ft.Row([self.home_start_button()], alignment=ft.MainAxisAlignment.CENTER),
         ], spacing=16, expand=True), expand=True)
 
@@ -280,8 +280,8 @@ class App:
         ], spacing=8, horizontal_alignment=ft.CrossAxisAlignment.CENTER), height=180, fill="#2b5148", padding=10)
         return ft.Container(ft.Column([
             badge("HOW IT WORKS", fill="#2b5148", color="#d4e8e2"), visual,
-            pager_title_block("See, drag, chain.", "All cards are visible. Drag one to its partner."),
-            ft.Row([self.flow_step("01", "See", "All cards visible"), self.flow_step("02", "Drag", "Drop in workspace"), self.flow_step("03", "Chain", "Correct pairs add up")], spacing=6),
+            pager_title_block("See, drag, combo.", "All cards are visible. Drag one to its partner."),
+            ft.Row([self.flow_step("01", "See", "All cards visible"), self.flow_step("02", "Drag", "Drop in workspace"), self.flow_step("03", "Combo", "Correct pairs add up")], spacing=6),
         ], spacing=14, expand=True), expand=True)
 
     def home_progress_page(self) -> ft.Control:
@@ -291,7 +291,7 @@ class App:
         return ft.Container(ft.Column([
             badge("YOUR PROGRESS", fill="#2b5148", color="#d4e9e2"), visual,
             pager_title_block("Your progress", "Finish a run and your record appears here."),
-            ft.Row([self.progress_metric("Completed", f"{completed} levels"), self.progress_metric("Best chain", f"×{best_combo}")], spacing=10),
+            ft.Row([self.progress_metric("Completed", f"{completed} levels"), self.progress_metric("Best combo", f"×{best_combo}")], spacing=10),
         ], spacing=14, expand=True), expand=True)
 
     def progress_metric(self, label: str, value: str) -> ft.Container:
@@ -313,8 +313,8 @@ class App:
         self.page.clean()
         content = ft.Column([
             section_title("How to play", "Three steps to one match"),
-            surface(ft.Column([self.flow_step("01", "Read first", "Question and formula cards are both visible. Find how they relate."), self.flow_step("02", "Then drag", "Drop the first card into the left slot, then its partner into the right slot."), self.flow_step("03", "Hold the chain", "Correct pairs grow your chain. A wrong pair locks input briefly.")], spacing=16), padding=18),
-            surface(ft.Column([section_title("Pairing rules"), text("Every level is timed. More correct pairs and fewer attempts give a higher score.", 15), ft.Row([badge("Correct +1 chain", fill=colors.SUCCESS_SURFACE), badge("Wrong locks input", fill=colors.ERROR_SURFACE, color=colors.ERROR), badge("Timer zero = over", fill=colors.GOLD_SURFACE)], spacing=8, wrap=True)], spacing=12), padding=18),
+            surface(ft.Column([self.flow_step("01", "Read first", "Question and formula cards are both visible. Find how they relate."), self.flow_step("02", "Then drag", "Drop the first card into the left slot, then its partner into the right slot."), self.flow_step("03", "Hold the combo", "Correct pairs grow your combo. A wrong pair locks input briefly.")], spacing=16), padding=18),
+            surface(ft.Column([section_title("Pairing rules"), text("Every level is timed. More correct pairs and fewer attempts give a higher score.", 15), ft.Row([badge("Correct +1 combo", fill=colors.SUCCESS_SURFACE), badge("Wrong locks input", fill=colors.ERROR_SURFACE, color=colors.ERROR), badge("Timer zero = over", fill=colors.GOLD_SURFACE)], spacing=8, wrap=True)], spacing=12), padding=18),
             self.pill("Back to home", lambda _: self.show_home(), primary=False),
         ], spacing=18, scroll=ft.ScrollMode.AUTO)
         self.page.add(self.shell(content)); self.page.update()
@@ -424,7 +424,7 @@ class App:
         show_game() recreates the chip on every refresh, so the pop has to run
         on the fresh control: push a larger scale, let the animation declared in
         combo_badge() play, then settle back to 1.0. The pop grows with the
-        streak so a long chain feels different from the first match.
+        streak so a long combo feels different from the first match.
         """
         chip = self.combo_badge
         if chip is None:
@@ -737,7 +737,7 @@ class App:
         if self.feedback_status == "success":
             if state.combo >= 3:
                 # Streak is hot: promotion from the neutral success tone to gold.
-                hint_text, hint_color = f"Matched · chain ×{state.combo}! Hold it", colors.HOUSE_GREEN
+                hint_text, hint_color = f"Matched · combo ×{state.combo}! Hold it", colors.HOUSE_GREEN
             else:
                 hint_text, hint_color = "Matched · keep the rhythm", colors.GREEN_LIGHT
         elif self.feedback_status == "error":
@@ -819,7 +819,7 @@ class App:
                     text("TOTAL SCORE", 11, color=colors.GREEN_ACCENT, weight=ft.FontWeight.W_700),
                     text(f"{points.total} / 100", 28, color=colors.HOUSE_GREEN, weight=ft.FontWeight.W_700),
                 ], spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER),
-                text(f"Matching {float(points.match):.1f}\nChain {float(points.combo):.1f} · Time {float(points.time):.1f}", 11, color="#41695b", text_align=ft.TextAlign.RIGHT),
+                text(f"Matching {float(points.match):.1f}\nCombo {float(points.combo):.1f} · Time {float(points.time):.1f}", 11, color="#41695b", text_align=ft.TextAlign.RIGHT),
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, vertical_alignment=ft.CrossAxisAlignment.CENTER),
             bgcolor=colors.SUCCESS_SURFACE,
             border_radius=18,
@@ -838,9 +838,9 @@ class App:
             )
 
         stats = ft.Row([result_stat("Steps", str(state.steps)), result_stat("Time left", f"{state.remaining_seconds}s")], spacing=10)
-        chain_peak = ft.Container(
+        combo_peak = ft.Container(
             ft.Row([
-                ft.Column([text("CHAIN PEAK", 11, color=colors.HOUSE_GREEN, weight=ft.FontWeight.W_700), text("Nice momentum through the level", 11, color="#41695b")], spacing=3, expand=True),
+                ft.Column([text("COMBO PEAK", 11, color=colors.HOUSE_GREEN, weight=ft.FontWeight.W_700), text("Nice momentum through the level", 11, color="#41695b")], spacing=3, expand=True),
                 text(f"×{state.max_combo}", 32, color=colors.HOUSE_GREEN, weight=ft.FontWeight.W_700),
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, vertical_alignment=ft.CrossAxisAlignment.CENTER),
             bgcolor=colors.GOLD_SURFACE,
@@ -858,7 +858,7 @@ class App:
             hero,
             score_strip,
             stats,
-            chain_peak,
+            combo_peak,
             *result_actions,
             next_hint,
             self.pill("Back to home", lambda _: self.show_home(), primary=False),
@@ -875,7 +875,7 @@ class App:
             ], spacing=4)
             right = ft.Column([
                 text(f"{score.steps} steps", 14, weight=ft.FontWeight.W_700),
-                text(f"{score.remaining_seconds}s · chain ×{score.max_combo}", 12, color=colors.INK_LIGHT),
+                text(f"{score.remaining_seconds}s · combo ×{score.max_combo}", 12, color=colors.INK_LIGHT),
             ], horizontal_alignment=ft.CrossAxisAlignment.END, spacing=4)
             rows.append(surface(ft.Row([left, right], alignment=ft.MainAxisAlignment.SPACE_BETWEEN), padding=16))
         content = ft.Column([section_title("Run summary", "Your concept-link record"), surface(ft.Column([text("Total score", 14, color=colors.INK_LIGHT), text(f"{sum(p.total for p in self.level_points.values())} / 200", 28, color=colors.HOUSE_GREEN, weight=ft.FontWeight.W_700)], spacing=4), fill=colors.GOLD_SURFACE, padding=18), *rows, ft.Row([self.pill("Play again", lambda _: self.restart(), large=True)], alignment=ft.MainAxisAlignment.CENTER), ft.Row([self.pill("Back to home", lambda _: self.show_home(), primary=False, large=True)], alignment=ft.MainAxisAlignment.CENTER)], spacing=16, horizontal_alignment=ft.CrossAxisAlignment.CENTER, scroll=ft.ScrollMode.AUTO)

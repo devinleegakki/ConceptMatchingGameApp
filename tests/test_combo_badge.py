@@ -70,7 +70,7 @@ def test_chain_of_three_or_more_turns_hot():
 
 
 def test_chip_reports_the_chain_count():
-    assert combo_badge(4).content.value == "Chain ×4"
+    assert combo_badge(4).content.value == "Combo ×4"
 
 
 def test_chip_declares_the_scale_pop():

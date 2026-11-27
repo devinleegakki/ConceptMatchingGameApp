@@ -62,7 +62,7 @@ def pager_title_block(title: str, description: str) -> ft.Column:
 def combo_badge(combo: int) -> ft.Container:
     """Live streak chip.
 
-    The fill steps from calm mint to gold to alert red as the chain grows, so
+    The fill steps from calm mint to gold to alert red as the combo grows, so
     the HUD itself reports how hot the run is. ``animate_scale`` is declared
     here so App.pulse_combo() only has to change ``scale`` twice to get a pop.
     """
@@ -74,7 +74,7 @@ def combo_badge(combo: int) -> ft.Container:
         # Hot streak: highest contrast the palette offers, still legible.
         fill, ink = colors.ERROR, colors.WHITE
     return ft.Container(
-        text(f"Chain ×{combo}", typography.MICRO, color=ink, weight=ft.FontWeight.W_700),
+        text(f"Combo ×{combo}", typography.MICRO, color=ink, weight=ft.FontWeight.W_700),
         bgcolor=fill,
         border_radius=20,
         padding=ft.Padding.symmetric(horizontal=10, vertical=6),
