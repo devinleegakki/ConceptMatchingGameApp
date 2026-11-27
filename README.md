@@ -17,6 +17,23 @@ When the Web preview tab is closed, the app exits the Flet process automatically
 
 The project defaults to the team's Google Sheets CSV endpoint. You can override it with `CSV_URL` before starting. The sheet must contain the schema below; an empty sheet produces a clear in-app error until content is added.
 
+## Connect player scores to Google Sheets
+
+The question bank uses `CSV_URL`. Player profiles and the leaderboard use a separate Apps Script web app connected to the team's private scores spreadsheet.
+
+1. Ask the deployment owner for the **web app URL ending in `/exec`**. If the team already has a deployment, everyone can use that URL. For a first deployment, the owner should follow the [Google Sheets setup guide](google_sheets/SETUP.md).
+2. From the folder containing `main.py`, run the following in PowerShell. When prompted, paste the URL on one line without quotes.
+
+   ```powershell
+   $scoresUrl = Read-Host 'Paste the scores web app URL ending in /exec'
+   Set-Content -LiteralPath src/services/scores_endpoint.txt -Encoding ascii -Value $scoresUrl
+   ```
+
+   Git ignores `src/services/scores_endpoint.txt`, so repeat this step for each fresh clone and on the machine building the APK **before building**. A nonempty file takes priority. If the file is missing or empty, the app reads the `SCORES_API_URL` environment variable from the process running the game.
+3. Start the desktop app with `python main.py`. Finish level 1, then open **Profile → Refresh** and look for the level and score under **Recent attempts**. The sheet owner can confirm the matching result appears once in `Attempts`. The leaderboard shows a score after the player clears both levels in the same run.
+
+**If a score is already waiting to sync**, keep the existing app data. After correcting the URL or reconnecting, restart the app on the same device to retry the queued upload. Then refresh Profile. An **Access denied** message means the owner should check that the web app runs as the owner and allows anyone to access it. The scores spreadsheet itself can stay restricted.
+
 ## CSV schema
 
 `level,order,pair_id,type,content,explanation,duration_seconds`
@@ -94,8 +111,4 @@ python -m pytest -q
 The release script builds only `arm64-v8a`, excludes Flet temporary files and test dependencies, and cleans old build directories first. This project is configured for local Android testing only; it does not build an AAB or publish to Google Play. The APK build itself does not validate the remote CSV contents; verify that `CSV_URL` is reachable and that the CSV follows the schema above when testing the installed app.
 
 On Windows, the script automatically stages the project in `C:\concept_match_build` when the workspace path contains non-ASCII characters, then copies the final artifact back to the workspace.
-
-## Player scores, profile and leaderboard
-
-See [Google Sheets setup and scoring rules](google_sheets/SETUP.md) to connect the private scores workbook. The public question CSV remains independently configurable.
 
